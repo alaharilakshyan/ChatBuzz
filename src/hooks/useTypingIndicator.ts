@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export const useTypingIndicator = (userId: string | undefined, chatId: string | null) => {
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {

@@ -61,7 +61,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent, c
   const [audioProgress, setAudioProgress] = useState(0);
   const [isDecrypting, setIsDecrypting] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLongPress, setIsLongPress] = useState(false);
 
   // Decrypt message in background when component mounts or message changes

@@ -43,7 +43,7 @@ export const LoginForm = () => {
       <CardHeader className="space-y-1 pb-4">
         <CardTitle className="text-2xl font-bold text-center">Welcome back</CardTitle>
         <CardDescription className="text-center">
-          Sign in to continue to ChatBuzz
+          Sign in to continue to TalkTime
         </CardDescription>
       </CardHeader>
       <CardContent>

@@ -39,7 +39,7 @@ export const RegisterForm = () => {
     setLoading(true);
     try {
       await register(username, email, password);
-      toast({ title: 'Account created!', description: "Welcome to ChatBuzz." });
+      toast({ title: 'Account created!', description: "Welcome to TalkTime." });
       navigate('/chat');
     } catch (error: any) {
       toast({
@@ -56,7 +56,7 @@ export const RegisterForm = () => {
     <Card className="w-full max-w-md mx-auto rounded-2xl border-border/60 shadow-elegant backdrop-blur-xl bg-card/95">
       <CardHeader className="space-y-1 pb-4">
         <CardTitle className="text-2xl font-bold text-center">Create account</CardTitle>
-        <CardDescription className="text-center">Get started with ChatBuzz in seconds</CardDescription>
+        <CardDescription className="text-center">Get started with TalkTime in seconds</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">

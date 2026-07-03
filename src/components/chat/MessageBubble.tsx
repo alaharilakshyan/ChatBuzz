@@ -180,10 +180,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent, c
     <div className={`flex gap-2 mb-3 animate-fade-in group ${isSent ? 'justify-end' : 'justify-start'}`}>
       <div className={`flex flex-col max-w-[80%] sm:max-w-[70%] ${isSent ? 'items-end' : 'items-start'}`}>
         <div 
-          className={`relative rounded-2xl px-4 py-2.5 shadow-md backdrop-blur-sm transition-all ${
+          className={`relative rounded-2xl px-4 py-2.5 shadow-sm transition-all duration-200 ${
             isSent 
-              ? 'bg-gradient-to-br from-primary to-primary/90 text-primary-foreground rounded-br-md' 
-              : 'bg-card/90 border border-border/50 rounded-bl-md'
+              ? 'bg-gradient-brand text-primary-foreground rounded-br-sm shadow-brand/10' 
+              : 'bg-secondary text-secondary-foreground rounded-bl-sm border border-border/10'
           }`}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}

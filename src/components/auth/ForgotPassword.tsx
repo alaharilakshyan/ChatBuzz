@@ -51,7 +51,7 @@ export const ForgotPassword = () => {
 
   if (emailSent) {
     return (
-      <Card className="w-full border-orange-200 dark:border-orange-800">
+      <Card className="w-full border-border/60 shadow-elegant backdrop-blur-xl bg-card/95 rounded-2xl hover:shadow-brand transition-all duration-300">
         <CardHeader>
           <CardTitle>Check Your Email</CardTitle>
           <CardDescription>
@@ -76,7 +76,7 @@ export const ForgotPassword = () => {
   }
 
   return (
-    <Card className="w-full border-orange-200 dark:border-orange-800">
+    <Card className="w-full border-border/60 shadow-elegant backdrop-blur-xl bg-card/95 rounded-2xl hover:shadow-brand transition-all duration-300">
       <CardHeader>
         <CardTitle>Reset Password</CardTitle>
         <CardDescription>

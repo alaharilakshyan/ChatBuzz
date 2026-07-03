@@ -2,7 +2,7 @@ import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { RefreshCw, Search, X, Phone, Video } from 'lucide-react';
+import { RefreshCw, Search, X, Phone, Video, ArrowLeft } from 'lucide-react';
 
 interface User {
   id: string;
@@ -25,6 +25,7 @@ interface ChatHeaderProps {
   onSearchChange?: (query: string) => void;
   onVoiceCall?: () => void;
   onVideoCall?: () => void;
+  onBack?: () => void;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({ 
@@ -38,13 +39,24 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   searchQuery = '',
   onSearchChange,
   onVoiceCall,
-  onVideoCall
+  onVideoCall,
+  onBack
 }) => {
   const [showSearch, setShowSearch] = React.useState(false);
 
   return (
     <div className="border-b border-border/50 backdrop-blur-xl bg-card/80">
       <div className="p-3 md:p-4 flex items-center gap-2 md:gap-4">
+        {onBack && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            className="md:hidden h-9 w-9 rounded-full hover:bg-muted"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        )}
         <div 
           className="flex items-center gap-3 md:gap-4 flex-1 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={onUserClick}

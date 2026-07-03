@@ -10,19 +10,19 @@ const Register = () => {
   if (user) return <Navigate to="/chat" replace />;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background relative overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-gradient-auth relative overflow-hidden">
       <div className="flex justify-end p-4 relative z-10">
         <ThemeToggle />
       </div>
 
       <div className="flex-1 flex items-center justify-center px-4 pb-10 relative z-10">
-        <div className="w-full max-w-md space-y-8">
+        <div className="w-full max-w-md space-y-8 animate-fade-in">
           <div className="text-center space-y-3">
-            <div className="w-16 h-16 rounded-3xl bg-primary flex items-center justify-center mx-auto shadow-md">
-              <MessageCircle className="h-8 w-8 text-primary-foreground" />
+            <div className="w-16 h-16 rounded-3xl bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center mx-auto shadow-lg animate-pulse-glow">
+              <MessageCircle className="h-8 w-8 text-white" />
             </div>
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">TalkTime</h1>
-            <p className="text-muted-foreground">Join the conversation</p>
+            <h1 className="text-4xl font-extrabold tracking-tight text-white drop-shadow-sm">ChatBuzz</h1>
+            <p className="text-white/80 font-medium">Join the conversation</p>
           </div>
           <RegisterForm />
         </div>

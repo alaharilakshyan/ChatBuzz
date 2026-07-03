@@ -39,11 +39,11 @@ export const LoginForm = () => {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto rounded-2xl border-border/60 shadow-elegant backdrop-blur-xl bg-card/95">
+    <Card className="w-full max-w-md mx-auto rounded-2xl border-border/60 shadow-elegant backdrop-blur-xl bg-card/95 hover:shadow-brand transition-all duration-300">
       <CardHeader className="space-y-1 pb-4">
-        <CardTitle className="text-2xl font-bold text-center">Welcome back</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center bg-gradient-brand bg-clip-text text-transparent">Welcome back</CardTitle>
         <CardDescription className="text-center">
-          Sign in to continue to TalkTime
+          Sign in to continue to ChatBuzz
         </CardDescription>
       </CardHeader>
       <CardContent>

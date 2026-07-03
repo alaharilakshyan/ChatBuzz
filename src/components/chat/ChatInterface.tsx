@@ -16,8 +16,7 @@ import { CallDialog } from './CallDialog';
 import { GroupList } from './GroupList';
 import { GroupChatInterface } from './GroupChatInterface';
 import { CreateGroupDialog } from './CreateGroupDialog';
-import { UserPlus, Users } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { UserPlus, Users, Home, Calendar, FileText, Search, MessageSquare, Plus, LogOut, Compass, ArrowLeft } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +28,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { UserList } from './UserList';
+import { Link } from 'react-router-dom';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 interface Message {
   id: string;
@@ -81,6 +83,7 @@ export const ChatInterface = () => {
   const [isVideoCall, setIsVideoCall] = useState(false);
   const [groupRefreshTrigger, setGroupRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState<'chats' | 'groups'>('chats');
+  const [sidebarSearch, setSidebarSearch] = useState('');
 
   const selectedFriend = friends.find(f => f.id === selectedFriendId);
 
@@ -501,34 +504,83 @@ export const ChatInterface = () => {
 
   const isTyping = selectedFriendId ? typingUsers.has(selectedFriendId) : false;
 
+  const filteredFriends = friendsWithStatus.filter(f => 
+    f.username.toLowerCase().includes(sidebarSearch.toLowerCase())
+  );
+
   return (
     <div className="h-[calc(100vh-4rem)] flex max-w-7xl mx-auto p-2 md:p-6 pb-20 md:pb-6 relative gap-4">
-      {/* Floating Friends Sidebar */}
-      <FloatingUserSidebar
-        users={friendsWithStatus}
-        selectedUserId={selectedFriendId}
-        onUserSelect={handleFriendSelect}
-        onlineUsers={onlineUsers}
-        currentUserId={user.id}
-        onRefresh={fetchFriends}
-        isRefreshing={false}
-        onGroupSelect={handleGroupSelect}
-      />
+      {/* 1. Left Vertical Icon Sidebar (Desktop only) */}
+      <div className="hidden md:flex flex-col items-center justify-between w-16 py-6 bg-card/50 backdrop-blur-xl border border-border/50 rounded-2xl shadow-xl flex-shrink-0">
+        <div className="flex flex-col items-center gap-6 w-full">
+          <div className="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center shadow-md animate-pulse-glow">
+            <span className="text-white font-extrabold text-sm">CB</span>
+          </div>
+          
+          <div className="flex flex-col items-center gap-4 w-full px-2">
+            <Button variant="ghost" size="icon" asChild className="h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200">
+              <Link to="/">
+                <Home className="h-5 w-5" />
+              </Link>
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200"
+              onClick={() => document.getElementById('sidebar-search-input')?.focus()}
+            >
+              <Search className="h-5 w-5" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setAddFriendDialog(true)} 
+              className="h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200"
+            >
+              <UserPlus className="h-5 w-5" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200"
+              onClick={() => {
+                toast({ title: "Calendar Schedules", description: "Scheduling call features coming soon!" });
+              }}
+            >
+              <Calendar className="h-5 w-5" />
+            </Button>
+            <Button variant="ghost" size="icon" asChild className="h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200">
+              <Link to="/settings">
+                <Settings className="h-5 w-5" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-4 w-full">
+          <ThemeToggle />
+        </div>
+      </div>
+
+      {/* Floating Friends Sidebar (Mobile only) */}
+      <div className="md:hidden">
+        <FloatingUserSidebar
+          users={friendsWithStatus}
+          selectedUserId={selectedFriendId}
+          onUserSelect={handleFriendSelect}
+          onlineUsers={onlineUsers}
+          currentUserId={user.id}
+          onRefresh={fetchFriends}
+          isRefreshing={false}
+          onGroupSelect={handleGroupSelect}
+        />
+      </div>
 
       {/* Add Friend Dialog */}
       <Dialog open={addFriendDialog} onOpenChange={setAddFriendDialog}>
-        <DialogTrigger asChild>
-          <Button 
-            data-add-friend-trigger
-            className="fixed left-4 top-36 z-40 rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-all hidden md:flex bg-gradient-to-br from-primary to-accent hover:opacity-90"
-            size="icon"
-          >
-            <UserPlus className="h-6 w-6" />
-          </Button>
-        </DialogTrigger>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 font-bold">
               <UserPlus className="h-5 w-5 text-primary" />
               Add Friend
             </DialogTitle>
@@ -538,7 +590,7 @@ export const ChatInterface = () => {
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div>
-              <Label htmlFor="userTag">User Tag</Label>
+              <Label htmlFor="userTag" className="font-semibold">User Tag</Label>
               <Input
                 id="userTag"
                 placeholder="1234"
@@ -548,30 +600,52 @@ export const ChatInterface = () => {
                 className="mt-2"
               />
             </div>
-            <Button onClick={handleAddFriend} className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90">
+            <Button onClick={handleAddFriend} className="w-full bg-gradient-brand hover:opacity-95 text-white font-semibold">
               Add Friend
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Groups Panel - Desktop */}
-      <div className="hidden md:flex w-72 flex-col bg-card/50 backdrop-blur-xl border border-border/50 rounded-2xl overflow-hidden shadow-xl">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col">
-          <TabsList className="w-full rounded-none bg-muted/30 p-1">
-            <TabsTrigger value="chats" className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+      {/* 2. Middle Sidebar (Chats & Groups Tabbed sidebar) */}
+      <div className={`${selectedFriendId || selectedGroupId ? 'hidden md:flex' : 'flex'} w-full md:w-80 flex-col bg-card/50 backdrop-blur-xl border border-border/50 rounded-2xl overflow-hidden shadow-xl flex-shrink-0`}>
+        {/* Search */}
+        <div className="p-3 border-b border-border/50">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="sidebar-search-input"
+              placeholder="Search chats..."
+              value={sidebarSearch}
+              onChange={(e) => setSidebarSearch(e.target.value)}
+              className="pl-9 bg-muted/30 border-none h-10 rounded-xl"
+            />
+          </div>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col min-h-0">
+          <TabsList className="w-full rounded-none bg-muted/10 border-b border-border/30 p-1">
+            <TabsTrigger value="chats" className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold">
               Chats
             </TabsTrigger>
-            <TabsTrigger value="groups" className="flex-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <TabsTrigger value="groups" className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold">
               Groups
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="chats" className="flex-1 m-0 p-2">
-            <div className="text-xs text-muted-foreground text-center py-2">
-              Use the floating sidebar to select a chat
-            </div>
+          
+          <TabsContent value="chats" className="flex-1 m-0 min-h-0 flex flex-col">
+            <UserList
+              users={filteredFriends}
+              selectedUserId={selectedFriendId}
+              onUserSelect={handleFriendSelect}
+              onlineUsers={onlineUsers}
+              currentUserId={user.id}
+              onRefresh={fetchFriends}
+              isRefreshing={isLoading}
+            />
           </TabsContent>
-          <TabsContent value="groups" className="flex-1 m-0 flex flex-col">
+          
+          <TabsContent value="groups" className="flex-1 m-0 min-h-0 flex flex-col">
             <div className="p-2 border-b border-border/50">
               <CreateGroupDialog onGroupCreated={() => setGroupRefreshTrigger(prev => prev + 1)} />
             </div>
@@ -584,9 +658,9 @@ export const ChatInterface = () => {
         </Tabs>
       </div>
 
-      {/* Chat Area */}
+      {/* 3. Right Chat Area */}
       <div 
-        className="flex-1 bg-card/50 backdrop-blur-xl border border-border/50 rounded-2xl overflow-hidden flex flex-col shadow-xl relative"
+        className={`${selectedFriendId || selectedGroupId ? 'flex' : 'hidden md:flex'} flex-1 bg-card/50 backdrop-blur-xl border border-border/50 rounded-2xl overflow-hidden flex flex-col shadow-xl relative`}
         style={chatBackground ? {
           backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url(${chatBackground})`,
           backgroundSize: 'cover',
@@ -610,6 +684,7 @@ export const ChatInterface = () => {
               onSearchChange={setSearchQuery}
               onVoiceCall={handleVoiceCall}
               onVideoCall={handleVideoCall}
+              onBack={() => setSelectedFriendId(null)}
             />
             <ChatMessages
               messages={messages.filter(msg => 

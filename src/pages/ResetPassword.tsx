@@ -70,25 +70,25 @@ const ResetPassword = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-rose-50 dark:from-gray-900 dark:to-gray-800 flex flex-col">
-      <div className="flex justify-end p-4">
+    <div className="min-h-screen bg-gradient-auth flex flex-col relative overflow-hidden">
+      <div className="flex justify-end p-4 relative z-10">
         <ThemeToggle />
       </div>
       
-      <div className="flex-1 flex items-center justify-center px-4">
-        <div className="w-full max-w-md space-y-8">
+      <div className="flex-1 flex items-center justify-center px-4 pb-10 relative z-10">
+        <div className="w-full max-w-md space-y-8 animate-fade-in">
           {/* Logo/Brand */}
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-orange-400 to-rose-400 rounded-2xl flex items-center justify-center mx-auto">
-              <span className="text-white font-bold text-2xl">C</span>
+          <div className="text-center space-y-3">
+            <div className="w-16 h-16 rounded-3xl bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center mx-auto shadow-lg animate-pulse-glow">
+              <span className="text-white font-extrabold text-2xl">CB</span>
             </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-rose-600 bg-clip-text text-transparent">
-              ChatApp
+            <h1 className="text-4xl font-extrabold tracking-tight text-white drop-shadow-sm">
+              ChatBuzz
             </h1>
-            <p className="text-muted-foreground">Create a new password</p>
+            <p className="text-white/80 font-medium">Create a new password</p>
           </div>
 
-          <Card className="w-full border-orange-200 dark:border-orange-800">
+          <Card className="w-full border-border/60 shadow-elegant backdrop-blur-xl bg-card/95 rounded-2xl">
             <CardHeader>
               <CardTitle>New Password</CardTitle>
               <CardDescription>

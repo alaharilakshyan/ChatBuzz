@@ -65,7 +65,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-background">
       {/* Top Navigation Bar */}
       <nav className="border-b bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <div className="container flex h-14 items-center px-4">
@@ -80,10 +80,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 e.currentTarget.nextElementSibling?.classList.remove('hidden');
               }}
             />
-            <div className="hidden w-8 h-8 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg items-center justify-center">
+            <div className="hidden w-8 h-8 bg-gradient-brand rounded-lg items-center justify-center">
               <span className="text-white font-bold text-sm">CB</span>
             </div>
-            <span className="hidden font-bold sm:inline-block bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+            <span className="hidden font-extrabold sm:inline-block bg-gradient-brand bg-clip-text text-transparent">
               ChatBuzz
             </span>
           </Link>
@@ -119,7 +119,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8 ring-2 ring-primary/20">
                       <AvatarImage src={user.avatar} alt={user.username} />
-                      <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-teal-500 text-white">
+                      <AvatarFallback className="bg-gradient-brand text-white">
                         {user.username.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>

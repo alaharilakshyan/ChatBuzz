@@ -11,68 +11,68 @@
 
 @layer base {
   :root {
-    /* Surfaces — modern light gray/blue app bg, white surfaces */
-    --background: 240 10% 98%;           /* #F9FAFB */
-    --foreground: 222 47% 11%;            /* #111827 */
+    /* Surfaces — modern minimalist sage/off-white gradient base */
+    --background: 150 10% 96%;           /* #F4F7F6 */
+    --foreground: 162 17% 12%;            /* #1A2421 */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card: 0 0% 100%;                     /* Milk White */
+    --card-foreground: 162 17% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 162 17% 12%;
 
-    /* Brand — ChatBuzz Blue primary (#3B82F6) */
-    --primary: 217 91% 60%;
+    /* Brand — Rich Charcoal Dark Teal (#0C1412) */
+    --primary: 165 38% 6%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 217 91% 75%;
+    --primary-glow: 165 38% 20%;
 
-    /* Accent — ChatBuzz Purple (#8B5CF6) */
-    --accent: 258 90% 66%;
+    /* Accent — Soft Spring Green (#4EAB77) for presence and highlights */
+    --accent: 146 38% 49%;
     --accent-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 96%;            /* #F3F4F6 */
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 150 10% 94%;            /* Sleek light sage tint */
+    --secondary-foreground: 165 38% 6%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;      /* #6B7280 */
+    --muted: 150 10% 92%;
+    --muted-foreground: 162 10% 40%;
 
     /* Status */
-    --success: 162 78% 41%;             /* #10B981 online green */
+    --success: 146 38% 49%;             /* Spring Green online indicators */
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;              /* #F59E0B away orange */
+    --warning: 38 92% 50%;              /* away orange */
     --warning-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;           /* #EF4444 error red */
+    --destructive: 0 84% 60%;           /* error red */
     --destructive-foreground: 0 0% 100%;
 
     /* Lines */
-    --border: 220 13% 91%;              /* #E5E7EB */
-    --input: 220 13% 91%;
-    --ring: 217 91% 60%;
+    --border: 150 10% 88%;              
+    --input: 150 10% 88%;
+    --ring: 165 38% 6%;
 
     /* Active conversation tint */
-    --active-tint: 217 91% 95%;
+    --active-tint: 150 10% 90%;
 
-    --radius: 0.75rem;                  /* 12px rounded corners */
+    --radius: 1rem;                  /* Premium rounded corners */
 
     /* Gradients */
-    --gradient-brand: linear-gradient(135deg, hsl(217 91% 60%), hsl(258 90% 66%));
-    --gradient-brand-soft: linear-gradient(135deg, hsl(217 91% 60% / 0.1), hsl(258 90% 66% / 0.1));
-    --gradient-auth-bg: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(258 90% 66%) 100%);
+    --gradient-brand: linear-gradient(135deg, #0C1412, #1A2421);
+    --gradient-brand-soft: linear-gradient(135deg, rgba(12, 20, 18, 0.05), rgba(26, 36, 33, 0.05));
+    --gradient-auth-bg: linear-gradient(135deg, #F4F7F6 0%, #E9EFEF 100%);
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px hsl(220 9% 46% / 0.05);
-    --shadow-md: 0 4px 16px -4px hsl(220 9% 46% / 0.1);
-    --shadow-lg: 0 12px 32px -10px hsl(220 9% 46% / 0.15);
-    --shadow-brand: 0 8px 24px -8px hsl(217 91% 60% / 0.2);
+    --shadow-sm: 0 1px 2px rgba(12, 20, 18, 0.02);
+    --shadow-md: 0 4px 16px -4px rgba(12, 20, 18, 0.04);
+    --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.04);
+    --shadow-brand: 0 8px 24px -8px rgba(12, 20, 18, 0.1);
 
-    --sidebar-background: 240 10% 98%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-background: 150 10% 96%;
+    --sidebar-foreground: 162 17% 12%;
+    --sidebar-primary: 165 38% 6%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 14% 96%;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-accent: 150 10% 94%;
+    --sidebar-accent-foreground: 165 38% 6%;
+    --sidebar-border: 150 10% 88%;
+    --sidebar-ring: 165 38% 6%;
   }
 
   .dark {
@@ -260,3 +260,49 @@
   box-shadow: 0 0 0 3px hsl(var(--ring) / 0.45);
   border-radius: 8px;
 }
+
+/* ---------- Neumorphic and Soft Blend Card Styling ---------- */
+.neumorphic-panel {
+  background: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 10px 30px rgba(12, 20, 18, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.neumorphic-input {
+  background: #FFFFFF;
+  border: 1px solid rgba(12, 20, 18, 0.08);
+  box-shadow: inset 0 2px 4px rgba(12, 20, 18, 0.02);
+  transition: all 0.2s ease;
+}
+.neumorphic-input:focus {
+  border-color: #0C1412;
+  box-shadow: 0 0 0 3px rgba(12, 20, 18, 0.06), inset 0 2px 4px rgba(12, 20, 18, 0.01);
+}
+
+/* ---------- Snapchat Ephemeral Melt / Shatter Animation ---------- */
+@keyframes meltAway {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  30% {
+    filter: blur(1px);
+    transform: translateY(4px) scale(0.98);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(15px) scale(0.9);
+    filter: blur(8px);
+    max-height: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+.animate-melt {
+  animation: meltAway 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  pointer-events: none;
+}
+

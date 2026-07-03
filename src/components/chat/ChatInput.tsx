@@ -1,9 +1,10 @@
-import React, { KeyboardEvent, useRef, useState } from 'react';
+import React, { KeyboardEvent, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Paperclip, X, Mic, StopCircle, Eye, EyeOff } from 'lucide-react';
+import { Send, Paperclip, X, Mic, StopCircle, Flame } from 'lucide-react';
 import { useVoiceRecording } from '@/hooks/useVoiceRecording';
-import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface ChatInputProps {
   value: string;
@@ -14,8 +15,8 @@ interface ChatInputProps {
   selectedFile: File | null;
   onClearFile: () => void;
   onVoiceRecordingComplete?: (file: File) => void;
-  isOneTimeView?: boolean;
-  onOneTimeViewToggle?: (enabled: boolean) => void;
+  isEphemeral?: boolean;
+  onEphemeralToggle?: (enabled: boolean) => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -27,8 +28,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   selectedFile,
   onClearFile,
   onVoiceRecordingComplete,
-  isOneTimeView = false,
-  onOneTimeViewToggle,
+  isEphemeral = false,
+  onEphemeralToggle,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { isRecording, recordingTime, startRecording, stopRecording, cancelRecording } = useVoiceRecording();
@@ -57,7 +58,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (isRecording) {
       const recording = await stopRecording();
       if (recording && onVoiceRecordingComplete) {
-        // Convert blob to file
         const file = new File([recording.blob], `voice-${Date.now()}.webm`, {
           type: 'audio/webm;codecs=opus',
         });
@@ -76,21 +76,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const isImage = selectedFile && selectedFile.type.startsWith('image/');
-  const isVideo = selectedFile && selectedFile.type.startsWith('video/');
   const previewUrl = selectedFile ? URL.createObjectURL(selectedFile) : null;
 
   return (
-    <div className="p-4 border-t">
+    <div className="p-4 border-t border-[#1A2421]/10 bg-white/60 backdrop-blur-xl">
       {isRecording && (
-        <div className="mb-2 p-3 bg-destructive/10 rounded-lg flex items-center gap-3">
+        <div className="mb-2 p-3 bg-red-50 text-red-700 border border-red-100 rounded-2xl flex items-center gap-3">
           <div className="flex-1 flex items-center gap-2">
-            <div className="h-3 w-3 bg-destructive rounded-full animate-pulse" />
-            <span className="text-sm font-medium">Recording: {formatRecordingTime(recordingTime)}</span>
+            <div className="h-2.5 w-2.5 bg-red-600 rounded-full animate-pulse" />
+            <span className="text-xs font-semibold">Recording: {formatRecordingTime(recordingTime)}</span>
           </div>
           <Button
             variant="ghost"
             size="sm"
             onClick={cancelRecording}
+            className="text-red-700 hover:bg-red-100/50 rounded-xl"
           >
             Cancel
           </Button>
@@ -98,52 +98,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       )}
       
       {selectedFile && (
-        <div className="mb-2 p-2 bg-muted rounded-lg space-y-2">
+        <div className="mb-3 p-3 bg-[#F4F7F6]/80 border border-[#1A2421]/5 rounded-2xl space-y-2">
           {isImage && previewUrl && (
-            <div className="relative max-w-xs">
+            <div className="relative max-w-xs rounded-xl overflow-hidden border border-[#1A2421]/10">
               <img 
                 src={previewUrl} 
                 alt="Preview" 
-                className="rounded-lg max-h-40 object-cover"
-              />
-            </div>
-          )}
-          {isVideo && previewUrl && (
-            <div className="relative max-w-xs">
-              <video 
-                src={previewUrl} 
-                className="rounded-lg max-h-40"
-                controls
+                className="max-h-32 object-cover"
               />
             </div>
           )}
           <div className="flex items-center gap-2">
-            <Paperclip className="h-4 w-4" />
-            <span className="text-sm flex-1 truncate">{selectedFile.name}</span>
-            {isImage && onOneTimeViewToggle && (
-              <Button
-                variant={isOneTimeView ? "default" : "ghost"}
-                size="sm"
-                onClick={() => onOneTimeViewToggle(!isOneTimeView)}
-                className="h-6 px-2 gap-1"
-                title={isOneTimeView ? "View once enabled" : "Click to enable view once"}
-              >
-                {isOneTimeView ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                <span className="text-xs">{isOneTimeView ? "1x" : ""}</span>
-              </Button>
-            )}
+            <Paperclip className="h-4 w-4 text-[#1A2421]/50" />
+            <span className="text-xs font-semibold flex-1 truncate text-[#0C1412]">{selectedFile.name}</span>
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={onClearFile}
-              className="h-6 w-6 p-0"
+              className="h-7 w-7 p-0 hover:bg-[#1A2421]/5 rounded-xl"
             >
               <X className="h-4 w-4" />
             </Button>
           </div>
         </div>
       )}
-      <div className="flex gap-2">
+
+      {/* Input row */}
+      <div className="flex gap-2 items-end">
         <input
           ref={fileInputRef}
           type="file"
@@ -151,49 +132,67 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           className="hidden"
           accept="image/*,video/*,.pdf,.doc,.docx,.txt"
         />
+        
         <Button
           variant="outline"
           size="icon"
           onClick={handleFileClick}
           disabled={isDisabled || isRecording}
-          className="shrink-0"
+          className="shrink-0 h-12 w-12 rounded-2xl border-[#1A2421]/10 bg-white hover:bg-[#0C1412]/5 text-[#1A2421]/60 hover:text-[#0C1412] shadow-sm transition-all duration-200"
         >
-          <Paperclip className="h-4 w-4" />
+          <Paperclip className="h-5 w-5" />
         </Button>
         
         <Textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyPress}
-          placeholder={isRecording ? "Recording..." : "Type a message..."}
-          className="min-h-[20px] max-h-[120px] resize-none"
+          placeholder={isRecording ? "Recording vocal..." : "Write a message..."}
+          className="min-h-[48px] max-h-[120px] resize-none neumorphic-input rounded-2xl py-3 px-4 text-sm text-[#0C1412] placeholder-[#1A2421]/40 border-[#1A2421]/10 focus:border-[#0C1412] focus-visible:ring-0 focus-visible:ring-offset-0 flex-1 scrollbar-thin"
           disabled={isDisabled || isRecording}
         />
+
+        {/* Snapchat ephemeral messages mode switch */}
+        {onEphemeralToggle && (
+          <div className="flex flex-col items-center gap-1 shrink-0 px-1 pb-1">
+            <Label htmlFor="ephemeral-mode" className="cursor-pointer text-[9px] uppercase tracking-wider font-bold text-[#1A2421]/50 flex items-center gap-0.5">
+              <Flame className={`w-3.5 h-3.5 ${isEphemeral ? "text-orange-500 fill-current" : ""}`} />
+              Melt
+            </Label>
+            <Switch
+              id="ephemeral-mode"
+              checked={isEphemeral}
+              onCheckedChange={onEphemeralToggle}
+              className="scale-90"
+            />
+          </div>
+        )}
         
         {!value.trim() && !selectedFile ? (
           <Button
             size="icon"
             onClick={handleVoiceRecord}
             disabled={isDisabled}
-            className={cn(isRecording && "bg-destructive hover:bg-destructive/90")}
+            className={`shrink-0 h-12 w-12 rounded-2xl shadow-sm transition-all duration-300 ${
+              isRecording 
+                ? "bg-red-600 hover:bg-red-700 text-white" 
+                : "bg-[#0C1412] hover:bg-[#1A2421] text-white"
+            }`}
           >
-            {isRecording ? <StopCircle className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            <span className="sr-only">{isRecording ? 'Stop recording' : 'Record voice message'}</span>
+            {isRecording ? <StopCircle className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
           </Button>
         ) : (
           <Button
             size="icon"
             onClick={onSend}
             disabled={(!value.trim() && !selectedFile) || isDisabled}
+            className="shrink-0 h-12 w-12 rounded-2xl bg-[#0C1412] hover:bg-[#1A2421] text-white shadow-sm transition-transform duration-200 active:scale-95"
           >
-            <Send className="h-4 w-4" />
-            <span className="sr-only">Send message</span>
+            <Send className="h-5 w-5" />
           </Button>
         )}
       </div>
-      <p className="text-xs text-muted-foreground mt-2">
-        {isRecording ? 'Click stop to send voice message' : 'Press Enter to send, Shift + Enter for new line'}
-      </p>
     </div>
   );
 };
+export default ChatInput;

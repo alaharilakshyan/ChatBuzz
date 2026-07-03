@@ -1,48 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useLiveNotifications } from '@/hooks/useLiveNotifications';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { encryptMessage } from '@/utils/encryption';
+import { WorkspaceSidebar, Workspace } from './WorkspaceSidebar';
+import { ChannelsList, Channel } from './ChannelsList';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessages } from './ChatMessages';
 import { ChatInput } from './ChatInput';
-import { FloatingUserSidebar } from './FloatingUserSidebar';
 import { EmptyChat } from './EmptyChat';
 import { UserProfileDialog } from './UserProfileDialog';
-import { ForwardMessageDialog } from './ForwardMessageDialog';
 import { CallDialog } from './CallDialog';
-import { GroupList } from './GroupList';
-import { GroupChatInterface } from './GroupChatInterface';
-import { CreateGroupDialog } from './CreateGroupDialog';
-import { UserPlus, Users, Home, Calendar, FileText, Search, MessageSquare, Plus, LogOut, Compass, ArrowLeft } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UserList } from './UserList';
-import { Link } from 'react-router-dom';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Search, UserPlus, Hash, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
+import gsap from 'gsap';
 
 interface Message {
   id: string;
   sender_id: string;
-  receiver_id: string;
+  channel_id?: string | null;
   content: string;
-  file_url: string | null;
-  file_name: string | null;
-  is_deleted: boolean;
+  file_url?: string | null;
+  file_name?: string | null;
+  attachments?: any;
+  metadata?: any;
+  is_ephemeral?: boolean;
+  expires_at?: string | null;
+  is_deleted?: boolean | null;
   created_at: string;
-  is_one_time_view?: boolean;
-  viewed_by?: string[];
   sender?: {
     username: string;
     avatar_url: string | null;
@@ -60,266 +52,364 @@ interface Profile {
 
 export const ChatInterface = () => {
   const { user } = useAuth();
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
 
-  const [friends, setFriends] = useState<Profile[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null); // null is DMs
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  
+  // DM candidate list
+  const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
+  // Message states
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [addFriendDialog, setAddFriendDialog] = useState(false);
-  const [friendUserTag, setFriendUserTag] = useState('');
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
-  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
-  const [chatBackground, setChatBackground] = useState<string | null>(null);
-  const [isOneTimeView, setIsOneTimeView] = useState(false);
+  const [isEphemeral, setIsEphemeral] = useState(false);
+  
+  // Search & Dialog states
   const [searchQuery, setSearchQuery] = useState('');
-  const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
+  const [sidebarSearch, setSidebarSearch] = useState('');
+  const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [callUser, setCallUser] = useState<Profile | null>(null);
   const [isVideoCall, setIsVideoCall] = useState(false);
-  const [groupRefreshTrigger, setGroupRefreshTrigger] = useState(0);
-  const [activeTab, setActiveTab] = useState<'chats' | 'groups'>('chats');
-  const [sidebarSearch, setSidebarSearch] = useState('');
 
-  const selectedFriend = friends.find(f => f.id === selectedFriendId);
+  // Layout transition container ref
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  // Typing indicator hook
-  const { typingUsers, handleTyping, stopTyping } = useTypingIndicator(user?.id, selectedFriendId);
+  // Typing indicators
+  const activeUserOrChannelId = activeWorkspaceId === null ? selectedFriendId : activeChannelId;
+  const isChannelType = activeWorkspaceId !== null;
+  const { typingUsers, handleTyping, stopTyping } = useTypingIndicator(user?.id, activeUserOrChannelId, isChannelType);
 
-  // Live notifications for new messages
-  useLiveNotifications({
-    userId: user?.id || '',
-    currentChatUserId: selectedFriendId,
-    onNewMessage: () => {
-      fetchFriends();
-    },
-  });
+  // Active workspace object
+  const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId);
+  const activeChannel = channels.find(c => c.id === activeChannelId);
+  const selectedFriend = allProfiles.find(p => p.id === selectedFriendId);
 
-  // Fetch friends
-  const fetchFriends = async () => {
+  // Stagger entry animations when active workspace switches
+  useEffect(() => {
+    if (panelRef.current) {
+      gsap.fromTo(
+        panelRef.current.children,
+        { opacity: 0, y: 15 },
+        { opacity: 1, y: 0, duration: 0.5, stagger: 0.08, ease: "power3.out" }
+      );
+    }
+  }, [activeWorkspaceId]);
+
+  // Fetch profiles & workspaces on load
+  useEffect(() => {
     if (!user) return;
+    fetchWorkspaces();
+    fetchAllProfiles();
 
-    const { data: sentFriends, error: sentError } = await supabase
-      .from('friends')
-      .select(`
-        friend_id,
-        profiles:friend_id (
-          id,
-          username,
-          user_tag,
-          avatar_url,
-          bio
-        )
-      `)
-      .eq('user_id', user.id)
-      .eq('status', 'accepted');
+    // Track online user presence
+    const presenceChannel = supabase.channel('online-users');
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const online = new Set(
+          Object.keys(state)
+            .flatMap(k => state[k])
+            .map((presence: any) => presence.user_id)
+            .filter(Boolean)
+        );
+        setOnlineUsers(online);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ user_id: user.id, online_at: new Date().toISOString() });
+        }
+      });
 
-    const { data: receivedFriends, error: receivedError } = await supabase
-      .from('friends')
-      .select(`
-        user_id,
-        profiles:user_id (
-          id,
-          username,
-          user_tag,
-          avatar_url,
-          bio
-        )
-      `)
-      .eq('friend_id', user.id)
-      .eq('status', 'accepted');
+    return () => {
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [user]);
 
-    if (sentError || receivedError) {
-      console.error('Error fetching friends:', sentError || receivedError);
+  // Fetch channels when active workspace changes
+  useEffect(() => {
+    if (!user) return;
+    if (activeWorkspaceId) {
+      fetchChannels(activeWorkspaceId);
+    } else {
+      setChannels([]);
+      setActiveChannelId(null);
+    }
+  }, [activeWorkspaceId, user]);
+
+  // Fetch messages when active channel changes
+  useEffect(() => {
+    if (!activeChannelId) {
+      setMessages([]);
       return;
     }
 
-    const allFriendProfiles = [
-      ...(sentFriends?.map((f: any) => f.profiles).filter(Boolean) || []),
-      ...(receivedFriends?.map((f: any) => f.profiles).filter(Boolean) || [])
-    ];
+    fetchMessages(activeChannelId);
 
-    setFriends(allFriendProfiles);
+    // Subscribe to messages in this channel
+    const channelSubscription = supabase
+      .channel(`room-${activeChannelId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+          filter: `channel_id=eq.${activeChannelId}`
+        },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            // Check if already in state
+            setMessages(prev => {
+              if (prev.some(m => m.id === payload.new.id)) return prev;
+              
+              // Load sender profile if missing
+              const msgWithSender = { ...payload.new };
+              if (payload.new.sender_id !== user?.id) {
+                const profile = allProfiles.find(p => p.id === payload.new.sender_id);
+                if (profile) {
+                  msgWithSender.sender = {
+                    username: profile.username,
+                    avatar_url: profile.avatar_url
+                  };
+                }
+              }
+              return [...prev, msgWithSender];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
+          } else if (payload.eventType === 'DELETE') {
+            setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channelSubscription);
+    };
+  }, [activeChannelId, allProfiles, user]);
+
+  const fetchWorkspaces = async () => {
+    const { data, error } = await supabase.from('workspaces').select('*');
+    if (!error) {
+      setWorkspaces(data || []);
+      
+      // Auto-create a default workspace if empty
+      if (data && data.length === 0 && user) {
+        createDefaultWorkspace();
+      }
+    }
   };
 
-  // Fetch messages
-  const fetchMessages = async (friendId: string) => {
-    if (!user) return;
+  const createDefaultWorkspace = async () => {
+    const defaultName = "Main Workspace";
+    const slug = "main-" + Math.floor(1000 + Math.random() * 9000);
+    const { data, error } = await supabase
+      .from('workspaces')
+      .insert({ name: defaultName, slug, owner_id: user?.id })
+      .select('*')
+      .single();
 
+    if (!error && data) {
+      setWorkspaces([data]);
+      // Create a default general channel
+      await supabase
+        .from('channels')
+        .insert({ workspace_id: data.id, name: 'general', is_private: false });
+    }
+  };
+
+  const fetchChannels = async (workspaceId: string) => {
+    const { data, error } = await supabase
+      .from('channels')
+      .select('*')
+      .eq('workspace_id', workspaceId);
+    
+    if (!error && data) {
+      setChannels(data);
+      // Auto select first channel if none is selected
+      if (data.length > 0) {
+        setActiveChannelId(data[0].id);
+      } else {
+        setActiveChannelId(null);
+      }
+    }
+  };
+
+  const fetchAllProfiles = async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*');
+    if (!error && data) {
+      // Exclude self from contact list
+      const filtered = data.filter((p: any) => p.id !== user?.id);
+      setAllProfiles(filtered);
+    }
+  };
+
+  const fetchMessages = async (channelId: string) => {
     setIsLoading(true);
     const { data, error } = await supabase
       .from('messages')
-      .select(`
-        *,
-        sender:profiles!sender_id (username, avatar_url)
-      `)
-      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${user.id})`)
-      .is('group_id', null)
+      .select('*')
+      .eq('channel_id', channelId)
       .order('created_at', { ascending: true });
 
-    if (error) {
-      console.error('Error fetching messages:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load messages",
-        variant: "destructive",
+    if (!error && data) {
+      // Map sender profile details
+      const mapped = data.map((msg: any) => {
+        const profile = allProfiles.find(p => p.id === msg.sender_id);
+        return {
+          ...msg,
+          sender: profile ? {
+            username: profile.username,
+            avatar_url: profile.avatar_url
+          } : undefined
+        };
       });
-    } else {
-      setMessages(data || []);
+      setMessages(mapped);
     }
     setIsLoading(false);
   };
 
-  useEffect(() => {
-    const loadBackground = () => {
-      const savedBackground = localStorage.getItem('chatBackground');
-      setChatBackground(savedBackground);
-    };
-    
-    loadBackground();
-    window.addEventListener('storage', loadBackground);
-    return () => window.removeEventListener('storage', loadBackground);
-  }, []);
+  const handleCreateWorkspace = async () => {
+    if (!newWorkspaceName.trim() || !user) return;
+    const slug = newWorkspaceName.trim().toLowerCase().replace(/\s+/g, '-') + '-' + Math.floor(1000 + Math.random() * 9000);
+    const { data, error } = await supabase
+      .from('workspaces')
+      .insert({ name: newWorkspaceName.trim(), slug, owner_id: user.id })
+      .select('*')
+      .single();
 
-  useEffect(() => {
-    if (user) {
-      fetchFriends();
-
-      const presenceChannel = supabase.channel('online-users');
+    if (!error && data) {
+      setWorkspaces(prev => [...prev, data]);
+      setWorkspaceDialogOpen(false);
+      setNewWorkspaceName('');
+      toast.success("Workspace created!");
       
-      presenceChannel
-        .on('presence', { event: 'sync' }, () => {
-          const state = presenceChannel.presenceState();
-          const online = new Set(
-            Object.keys(state)
-              .flatMap(k => state[k])
-              .map((presence: any) => presence.user_id)
-              .filter(Boolean)
-          );
-          setOnlineUsers(online);
-        })
-        .on('presence', { event: 'join' }, ({ newPresences }) => {
-          const userId = (newPresences[0] as any)?.user_id;
-          if (userId) {
-            setOnlineUsers(prev => new Set([...prev, userId]));
-          }
-        })
-        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-          const userId = (leftPresences[0] as any)?.user_id;
-          if (userId) {
-            setOnlineUsers(prev => {
-              const next = new Set(prev);
-              next.delete(userId);
-              return next;
-            });
-          }
-        })
-        .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            await presenceChannel.track({ user_id: user.id, online_at: new Date().toISOString() });
-          }
-        });
-
-      const channel = supabase
-        .channel('friends-updates')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'friends',
-          },
-          (payload: any) => {
-            if (payload.eventType === 'UPDATE' && payload.new.status === 'accepted') {
-              toast({
-                title: "New Friend! 🎉",
-                description: "Someone accepted your friend request!",
-              });
-            }
-            fetchFriends();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(presenceChannel);
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (selectedFriendId) {
-      setSelectedGroupId(null);
-      fetchMessages(selectedFriendId);
+      // Auto create general channel
+      const { data: chan } = await supabase
+        .from('channels')
+        .insert({ workspace_id: data.id, name: 'general', is_private: false })
+        .select('*')
+        .single();
       
-      const channel = supabase
-        .channel('messages')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-          },
-          (payload: any) => {
-            if (
-              (payload.new.sender_id === selectedFriendId && payload.new.receiver_id === user?.id) ||
-              (payload.new.sender_id === user?.id && payload.new.receiver_id === selectedFriendId)
-            ) {
-              setMessages(prev => {
-                if (prev.some(m => m.id === payload.new.id)) return prev;
-                return [...prev, payload.new];
-              });
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'messages',
-          },
-          (payload: any) => {
-            if (payload.new.sender_id === selectedFriendId || payload.new.receiver_id === selectedFriendId) {
-              setMessages(prev => prev.map(msg => msg.id === payload.new.id ? payload.new : msg));
-            }
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
+      setActiveWorkspaceId(data.id);
+      if (chan) {
+        setChannels([chan]);
+        setActiveChannelId(chan.id);
+      }
+    } else {
+      toast.error("Failed to create workspace");
     }
-  }, [selectedFriendId, user]);
-
-  const handleFriendSelect = (friendId: string) => {
-    setSelectedFriendId(friendId);
-    setSelectedGroupId(null);
   };
 
-  const handleGroupSelect = (groupId: string) => {
-    setSelectedGroupId(groupId);
-    setSelectedFriendId(null);
+  const handleCreateChannel = async (name: string, isPrivate: boolean) => {
+    if (!activeWorkspaceId) return;
+    const { data, error } = await supabase
+      .from('channels')
+      .insert({
+        workspace_id: activeWorkspaceId,
+        name,
+        is_private: isPrivate,
+        allowed_roles: isPrivate ? ['owner', 'admin'] : ['owner', 'admin', 'member']
+      })
+      .select('*')
+      .single();
+
+    if (!error && data) {
+      setChannels(prev => [...prev, data]);
+      setActiveChannelId(data.id);
+      toast.success(`Channel #${name} created!`);
+    } else {
+      toast.error("Failed to create channel");
+    }
+  };
+
+  // Find or create DM channel
+  const handleSelectFriend = async (friendId: string) => {
+    setSelectedFriendId(friendId);
+    
+    // Check if we have a direct messages workspace
+    let dmWorkspace = workspaces.find(w => w.slug === 'direct-messages');
+    if (!dmWorkspace) {
+      const { data } = await supabase
+        .from('workspaces')
+        .select('*')
+        .eq('slug', 'direct-messages')
+        .maybeSingle();
+      dmWorkspace = data || undefined;
+    }
+
+    if (!dmWorkspace && user) {
+      // Create DMs workspace
+      const { data } = await supabase
+        .from('workspaces')
+        .insert({ name: "Direct Messages", slug: "direct-messages", owner_id: user.id })
+        .select('*')
+        .single();
+      if (data) {
+        dmWorkspace = data;
+        setWorkspaces(prev => [...prev, data]);
+      }
+    }
+
+    if (dmWorkspace && user) {
+      const dmChannelSlug = `dm-${[user.id, friendId].sort().join('-')}`;
+      
+      // Look for channel in DM workspace
+      let { data: chan, error } = await supabase
+        .from('channels')
+        .select('*')
+        .eq('workspace_id', dmWorkspace.id)
+        .eq('name', dmChannelSlug)
+        .maybeSingle();
+
+      if (!chan) {
+        // Create new DM channel
+        const { data: newChan } = await supabase
+          .from('channels')
+          .insert({
+            workspace_id: dmWorkspace.id,
+            name: dmChannelSlug,
+            is_private: true,
+            allowed_roles: ['member', 'owner', 'admin']
+          })
+          .select('*')
+          .single();
+        chan = newChan;
+      }
+
+      if (chan) {
+        setActiveChannelId(chan.id);
+      }
+    }
   };
 
   const handleMessageChange = (value: string) => {
     setNewMessage(value);
-    handleTyping();
+    if (user) {
+      handleTyping(user.username);
+    }
   };
 
   const handleSendMessage = async () => {
-    if (!user || !selectedFriendId || (!newMessage.trim() && !selectedFile) || isSending) return;
+    if (!user || !activeChannelId || (!newMessage.trim() && !selectedFile) || isSending) return;
 
     setIsSending(true);
     setUploading(true);
-    stopTyping();
+    stopTyping(user.username);
 
     let fileUrl = null;
     let fileName = null;
@@ -335,11 +425,7 @@ export const ChatInterface = () => {
         .upload(filePath, selectedFile);
 
       if (uploadError) {
-        toast({
-          title: "Error",
-          description: "Failed to upload file",
-          variant: "destructive",
-        });
+        toast.error("Failed to upload attachment");
         setIsSending(false);
         setUploading(false);
         return;
@@ -360,39 +446,40 @@ export const ChatInterface = () => {
       }
     }
 
-    const encryptedContent = await encryptMessage(messageContent, user.id, selectedFriendId);
+    const encryptedContent = await encryptMessage(messageContent, user.id, activeChannelId);
 
-    const isImage = selectedFile && selectedFile.type.startsWith('image/');
-    
-    const { data, error } = await supabase
+    // Build attachment object structure
+    const attachmentsPayload = fileUrl ? [{
+      name: fileName,
+      size: fileSize,
+      url: fileUrl,
+      mime_type: selectedFile?.type
+    }] : [];
+
+    // Build metadata payload
+    const metadataPayload = {
+      is_one_time_view: false,
+      has_card: messageContent.toLowerCase().includes("townhouse")
+    };
+
+    const { error } = await supabase
       .from('messages')
       .insert({
+        channel_id: activeChannelId,
         sender_id: user.id,
-        receiver_id: selectedFriendId,
         content: encryptedContent,
-        file_url: fileUrl,
-        file_name: fileName,
-        file_size: fileSize,
-        is_one_time_view: isImage && isOneTimeView,
-        viewed_by: [],
-      })
-      .select(`
-        *,
-        sender:profiles!sender_id (username, avatar_url)
-      `)
-      .single();
+        attachments: attachmentsPayload,
+        metadata: metadataPayload,
+        is_ephemeral: isEphemeral,
+        expires_at: null // Calculated post-read for recipient
+      });
 
     if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to send message",
-        variant: "destructive",
-      });
+      toast.error("Failed to send message");
     } else {
-      setMessages(prev => [...prev, data]);
       setNewMessage('');
       setSelectedFile(null);
-      setIsOneTimeView(false);
+      setIsEphemeral(false);
     }
 
     setIsSending(false);
@@ -404,315 +491,217 @@ export const ChatInterface = () => {
     setTimeout(() => handleSendMessage(), 100);
   };
 
-  const handleAddFriend = async () => {
-    if (!user || !friendUserTag.trim()) return;
-
-    try {
-      const { data: friendProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, username')
-        .eq('user_tag', friendUserTag.trim())
-        .single();
-
-      if (profileError || !friendProfile) {
-        toast({
-          title: "Error",
-          description: "User not found with that tag",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (friendProfile.id === user.id) {
-        toast({
-          title: "Error",
-          description: "You cannot add yourself as a friend",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { data: existingFriend } = await supabase
-        .from('friends')
-        .select('*')
-        .or(`and(user_id.eq.${user.id},friend_id.eq.${friendProfile.id}),and(user_id.eq.${friendProfile.id},friend_id.eq.${user.id})`)
-        .single();
-
-      if (existingFriend) {
-        toast({
-          title: "Info",
-          description: existingFriend.status === 'pending' ? "Friend request already sent" : "Already friends",
-        });
-        return;
-      }
-
-      const { error: insertError } = await supabase
-        .from('friends')
-        .insert({
-          user_id: user.id,
-          friend_id: friendProfile.id,
-          status: 'accepted'
-        });
-
-      if (insertError) {
-        toast({
-          title: "Error",
-          description: "Failed to add friend",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      toast({
-        title: "Success! 🎉",
-        description: `${friendProfile.username} added as friend`,
-      });
-
-      setAddFriendDialog(false);
-      setFriendUserTag('');
-      fetchFriends();
-    } catch (error) {
-      console.error('Add friend error:', error);
-      toast({
-        title: "Error",
-        description: "Something went wrong",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleVoiceCall = () => {
-    if (selectedFriend) {
-      setCallUser(selectedFriend);
-      setIsVideoCall(false);
-    }
-  };
-
-  const handleVideoCall = () => {
-    if (selectedFriend) {
-      setCallUser(selectedFriend);
-      setIsVideoCall(true);
-    }
-  };
-
   if (!user) return null;
 
-  const friendsWithStatus = friends.map(friend => ({
-    ...friend,
-    isOnline: onlineUsers.has(friend.id)
+  const friendsWithStatus = allProfiles.map(p => ({
+    ...p,
+    isOnline: onlineUsers.has(p.id)
   }));
-
-  const isTyping = selectedFriendId ? typingUsers.has(selectedFriendId) : false;
 
   const filteredFriends = friendsWithStatus.filter(f => 
     f.username.toLowerCase().includes(sidebarSearch.toLowerCase())
   );
 
+  const isTyping = typingUsers.size > 0;
+  const typingListText = Array.from(typingUsers).join(', ');
+
   return (
-    <div className="h-[calc(100vh-4rem)] flex max-w-7xl mx-auto p-2 md:p-6 pb-20 md:pb-6 relative gap-4">
-      {/* 1. Left Vertical Icon Sidebar (Desktop only) */}
-      <div className="hidden md:flex flex-col items-center justify-between w-16 py-6 bg-card/50 backdrop-blur-xl border border-border/50 rounded-2xl shadow-xl flex-shrink-0">
-        <div className="flex flex-col items-center gap-6 w-full">
-          <div className="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center shadow-md animate-pulse-glow">
-            <span className="text-white font-extrabold text-sm">CB</span>
-          </div>
-          
-          <div className="flex flex-col items-center gap-4 w-full px-2">
-            <Button variant="ghost" size="icon" asChild className="h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200">
-              <Link to="/">
-                <Home className="h-5 w-5" />
-              </Link>
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200"
-              onClick={() => document.getElementById('sidebar-search-input')?.focus()}
-            >
-              <Search className="h-5 w-5" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => setAddFriendDialog(true)} 
-              className="h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200"
-            >
-              <UserPlus className="h-5 w-5" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200"
-              onClick={() => {
-                toast({ title: "Calendar Schedules", description: "Scheduling call features coming soon!" });
-              }}
-            >
-              <Calendar className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" asChild className="h-10 w-10 rounded-xl hover:bg-primary/10 hover:text-primary transition-all duration-200">
-              <Link to="/settings">
-                <Settings className="h-5 w-5" />
-              </Link>
-            </Button>
-          </div>
-        </div>
+    <div className="h-[calc(100vh-4rem)] flex max-w-7xl mx-auto p-4 md:p-6 pb-20 md:pb-6 relative gap-4 bg-gradient-to-br from-[#F4F7F6] to-[#E9EFEF]">
+      
+      {/* 1. Left Vertical Workspaces Sidebar */}
+      <WorkspaceSidebar
+        workspaces={workspaces.filter(w => w.slug !== 'direct-messages')}
+        activeWorkspaceId={activeWorkspaceId}
+        onSelectWorkspace={(id) => {
+          setActiveWorkspaceId(id);
+          setSelectedFriendId(null);
+        }}
+        onCreateWorkspace={() => setWorkspaceDialogOpen(true)}
+        user={user}
+      />
 
-        <div className="flex flex-col items-center gap-4 w-full">
-          <ThemeToggle />
+      {/* 2. Middle Collapsible Sidebar (Channels or Direct Messages) */}
+      <div ref={panelRef} className="flex gap-4 flex-1 md:flex-none">
+        
+        {/* Workspace views */}
+        {activeWorkspaceId ? (
+          <div className="w-64 flex-shrink-0 h-full">
+            <ChannelsList
+              channels={channels}
+              activeChannelId={activeChannelId}
+              onSelectChannel={setActiveChannelId}
+              onCreateChannel={handleCreateChannel}
+              isOwner={activeWorkspace?.owner_id === user.id}
+            />
+          </div>
+        ) : (
+          /* DMs contact list panel */
+          <div className="w-64 flex flex-col h-full bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.03)] overflow-hidden flex-shrink-0">
+            {/* Search */}
+            <div className="p-4 border-b border-[#1A2421]/10">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#1A2421]/45" />
+                <Input
+                  placeholder="Search contacts..."
+                  value={sidebarSearch}
+                  onChange={(e) => setSidebarSearch(e.target.value)}
+                  className="pl-9 bg-white border-[#1A2421]/10 focus-visible:ring-[#0C1412] h-10 rounded-xl"
+                />
+              </div>
+            </div>
+            
+            {/* Contact list */}
+            <div className="p-3 border-b border-[#1A2421]/15">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-[#1A2421]/50 px-2">Messages</span>
+            </div>
+
+            <ScrollArea className="flex-1 p-2">
+              <div className="space-y-0.5">
+                {filteredFriends.map((friend) => {
+                  const isSelected = selectedFriendId === friend.id;
+                  
+                  return (
+                    <button
+                      key={friend.id}
+                      onClick={() => handleSelectFriend(friend.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-200 ${
+                        isSelected
+                          ? "bg-[#0C1412] text-white shadow-sm"
+                          : "text-[#1A2421]/75 hover:bg-[#0C1412]/5 hover:text-[#0C1412]"
+                      }`}
+                    >
+                      <div className="relative">
+                        <Avatar className="h-9 w-9 rounded-xl border border-[#1A2421]/5">
+                          <AvatarImage src={friend.avatar_url || ''} />
+                          <AvatarFallback className={isSelected ? "bg-white/20 text-white" : "bg-[#0C1412] text-white"}>
+                            {friend.username.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        {friend.isOnline && (
+                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#4EAB77] border-2 border-white rounded-full" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold truncate">{friend.username}</p>
+                        <p className="text-[10px] opacity-60 truncate mt-0.5">
+                          {friend.isOnline ? "Online" : "Offline"}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+                {filteredFriends.length === 0 && (
+                  <p className="text-xs text-muted-foreground/60 text-center py-6">No users found</p>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+
+        {/* 3. Main Conversational Panel */}
+        <div 
+          className="flex-1 bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl overflow-hidden flex flex-col shadow-[0_20px_50px_rgba(0,0,0,0.03)] relative min-w-[320px] md:w-[480px] lg:w-[600px] xl:w-[700px]"
+        >
+          {activeChannelId ? (
+            <>
+              {/* Header */}
+              <ChatHeader
+                selectedUser={activeWorkspaceId === null ? selectedFriend || { username: 'Chat Hub', avatar_url: null, id: '' } as any : { username: `#${activeChannel?.name || 'room'}`, avatar_url: null, id: '' } as any}
+                isOnline={activeWorkspaceId === null ? (selectedFriend ? onlineUsers.has(selectedFriend.id) : false) : true}
+                isTyping={isTyping}
+                isConnected={true}
+                onRefresh={() => fetchMessages(activeChannelId)}
+                isRefreshing={isLoading}
+                onUserClick={() => setProfileDialogOpen(true)}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onVoiceCall={() => {
+                  if (selectedFriend) {
+                    setCallUser(selectedFriend);
+                    setIsVideoCall(false);
+                  }
+                }}
+                onVideoCall={() => {
+                  if (selectedFriend) {
+                    setCallUser(selectedFriend);
+                    setIsVideoCall(true);
+                  }
+                }}
+                onBack={() => {
+                  setActiveChannelId(null);
+                  setSelectedFriendId(null);
+                }}
+              />
+              
+              {/* Messages feed */}
+              <ChatMessages
+                messages={messages.filter(msg => 
+                  searchQuery ? msg.content.toLowerCase().includes(searchQuery.toLowerCase()) : true
+                )}
+                currentUserId={user.id}
+                otherUserId={activeChannelId}
+                isLoading={isLoading}
+                onDelete={(id) => setMessages(prev => prev.filter(m => m.id !== id))}
+              />
+
+              {/* Typing indicators status message */}
+              {isTyping && (
+                <div className="px-6 py-1 bg-white/40">
+                  <span className="text-[10px] font-bold text-[#4EAB77] animate-pulse">
+                    ● {typingListText} {typingUsers.size === 1 ? 'is' : 'are'} typing...
+                  </span>
+                </div>
+              )}
+
+              {/* Chat Input area */}
+              <ChatInput
+                value={newMessage}
+                onChange={handleMessageChange}
+                onSend={handleSendMessage}
+                isDisabled={isSending || uploading}
+                onFileSelect={setSelectedFile}
+                selectedFile={selectedFile}
+                onClearFile={() => setSelectedFile(null)}
+                onVoiceRecordingComplete={handleVoiceRecording}
+                isEphemeral={isEphemeral}
+                onEphemeralToggle={setIsEphemeral}
+              />
+            </>
+          ) : (
+            <EmptyChat />
+          )}
         </div>
       </div>
 
-      {/* Floating Friends Sidebar (Mobile only) */}
-      <div className="md:hidden">
-        <FloatingUserSidebar
-          users={friendsWithStatus}
-          selectedUserId={selectedFriendId}
-          onUserSelect={handleFriendSelect}
-          onlineUsers={onlineUsers}
-          currentUserId={user.id}
-          onRefresh={fetchFriends}
-          isRefreshing={false}
-          onGroupSelect={handleGroupSelect}
-        />
-      </div>
-
-      {/* Add Friend Dialog */}
-      <Dialog open={addFriendDialog} onOpenChange={setAddFriendDialog}>
-        <DialogContent className="sm:max-w-md">
+      {/* Dialog for Creating Workspaces */}
+      <Dialog open={workspaceDialogOpen} onOpenChange={setWorkspaceDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-3xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-bold">
-              <UserPlus className="h-5 w-5 text-primary" />
-              Add Friend
+            <DialogTitle className="font-bold text-[#0C1412] flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
+              Create Workspace
             </DialogTitle>
             <DialogDescription>
-              Enter your friend's user tag (the 4-digit number) to add them.
+              Name your workspace. Distinct domains help organize categorized hub chats.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div>
-              <Label htmlFor="userTag" className="font-semibold">User Tag</Label>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="wsName" className="font-bold text-[#1A2421]">Workspace Name</Label>
               <Input
-                id="userTag"
-                placeholder="1234"
-                value={friendUserTag}
-                onChange={(e) => setFriendUserTag(e.target.value)}
-                maxLength={4}
-                className="mt-2"
+                id="wsName"
+                placeholder="e.g. Design Team"
+                value={newWorkspaceName}
+                onChange={(e) => setNewWorkspaceName(e.target.value)}
+                className="rounded-xl border-[#1A2421]/10 focus-visible:ring-[#0C1412]"
               />
             </div>
-            <Button onClick={handleAddFriend} className="w-full bg-gradient-brand hover:opacity-95 text-white font-semibold">
-              Add Friend
-            </Button>
           </div>
+          <Button onClick={handleCreateWorkspace} className="w-full bg-[#0C1412] hover:bg-[#1A2421] text-white rounded-xl py-6 font-semibold">
+            Create Workspace
+          </Button>
         </DialogContent>
       </Dialog>
-
-      {/* 2. Middle Sidebar (Chats & Groups Tabbed sidebar) */}
-      <div className={`${selectedFriendId || selectedGroupId ? 'hidden md:flex' : 'flex'} w-full md:w-80 flex-col bg-card/50 backdrop-blur-xl border border-border/50 rounded-2xl overflow-hidden shadow-xl flex-shrink-0`}>
-        {/* Search */}
-        <div className="p-3 border-b border-border/50">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              id="sidebar-search-input"
-              placeholder="Search chats..."
-              value={sidebarSearch}
-              onChange={(e) => setSidebarSearch(e.target.value)}
-              className="pl-9 bg-muted/30 border-none h-10 rounded-xl"
-            />
-          </div>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col min-h-0">
-          <TabsList className="w-full rounded-none bg-muted/10 border-b border-border/30 p-1">
-            <TabsTrigger value="chats" className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold">
-              Chats
-            </TabsTrigger>
-            <TabsTrigger value="groups" className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-semibold">
-              Groups
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="chats" className="flex-1 m-0 min-h-0 flex flex-col">
-            <UserList
-              users={filteredFriends}
-              selectedUserId={selectedFriendId}
-              onUserSelect={handleFriendSelect}
-              onlineUsers={onlineUsers}
-              currentUserId={user.id}
-              onRefresh={fetchFriends}
-              isRefreshing={isLoading}
-            />
-          </TabsContent>
-          
-          <TabsContent value="groups" className="flex-1 m-0 min-h-0 flex flex-col">
-            <div className="p-2 border-b border-border/50">
-              <CreateGroupDialog onGroupCreated={() => setGroupRefreshTrigger(prev => prev + 1)} />
-            </div>
-            <GroupList
-              selectedGroupId={selectedGroupId}
-              onGroupSelect={handleGroupSelect}
-              refreshTrigger={groupRefreshTrigger}
-            />
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      {/* 3. Right Chat Area */}
-      <div 
-        className={`${selectedFriendId || selectedGroupId ? 'flex' : 'hidden md:flex'} flex-1 bg-card/50 backdrop-blur-xl border border-border/50 rounded-2xl overflow-hidden flex flex-col shadow-xl relative`}
-        style={chatBackground ? {
-          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url(${chatBackground})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundAttachment: 'fixed'
-        } : undefined}
-      >
-        {selectedGroupId ? (
-          <GroupChatInterface groupId={selectedGroupId} onBack={() => setSelectedGroupId(null)} />
-        ) : selectedFriend ? (
-          <>
-            <ChatHeader
-              selectedUser={selectedFriend}
-              isOnline={onlineUsers.has(selectedFriendId!)}
-              isTyping={isTyping}
-              isConnected={true}
-              onRefresh={() => fetchMessages(selectedFriendId!)}
-              isRefreshing={isLoading}
-              onUserClick={() => setProfileDialogOpen(true)}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              onVoiceCall={handleVoiceCall}
-              onVideoCall={handleVideoCall}
-              onBack={() => setSelectedFriendId(null)}
-            />
-            <ChatMessages
-              messages={messages.filter(msg => 
-                searchQuery ? msg.content.toLowerCase().includes(searchQuery.toLowerCase()) : true
-              )}
-              currentUserId={user.id}
-              otherUserId={selectedFriendId!}
-              isLoading={isLoading}
-              onDelete={(messageId) => setMessages(prev => prev.map(m => m.id === messageId ? { ...m, is_deleted: true } : m))}
-              onForward={(message) => setForwardMessage(message)}
-            />
-            <ChatInput
-              value={newMessage}
-              onChange={handleMessageChange}
-              onSend={handleSendMessage}
-              isDisabled={isSending || uploading}
-              onFileSelect={setSelectedFile}
-              selectedFile={selectedFile}
-              onClearFile={() => setSelectedFile(null)}
-              onVoiceRecordingComplete={handleVoiceRecording}
-              isOneTimeView={isOneTimeView}
-              onOneTimeViewToggle={setIsOneTimeView}
-            />
-          </>
-        ) : (
-          <EmptyChat />
-        )}
-      </div>
 
       {/* User Profile Dialog */}
       {selectedFriendId && (
@@ -724,18 +713,6 @@ export const ChatInterface = () => {
         />
       )}
 
-      {/* Forward Message Dialog */}
-      <ForwardMessageDialog
-        open={!!forwardMessage}
-        onOpenChange={(open) => !open && setForwardMessage(null)}
-        message={forwardMessage ? {
-          id: forwardMessage.id,
-          content: forwardMessage.content,
-          file_url: forwardMessage.file_url,
-          file_name: forwardMessage.file_name,
-        } : null}
-      />
-
       {/* Call Dialog */}
       <CallDialog
         open={!!callUser}
@@ -746,3 +723,4 @@ export const ChatInterface = () => {
     </div>
   );
 };
+export default ChatInterface;

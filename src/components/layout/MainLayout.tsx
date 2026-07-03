@@ -36,6 +36,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   };
 
   const isActive = (path: string) => location.pathname === path;
+  const isChatPage = location.pathname.startsWith('/chat');
 
   const NavLinks = () => (
     <>
@@ -65,8 +66,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
       {/* Top Navigation Bar */}
+      {!isChatPage && (
       <nav className="border-b bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <div className="container flex h-14 items-center px-4">
           {/* Logo */}
@@ -151,9 +153,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </div>
         </div>
       </nav>
+      )}
 
       {/* Main Content */}
-      <main className="container mx-auto p-2 sm:p-4">
+      <main className={`flex-1 ${!isChatPage ? 'container mx-auto p-2 sm:p-4' : ''}`}>
         {children}
       </main>
     </div>

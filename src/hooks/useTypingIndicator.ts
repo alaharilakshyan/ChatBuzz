@@ -1,28 +1,32 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-export const useTypingIndicator = (userId: string | undefined, chatId: string | null) => {
+export const useTypingIndicator = (userId: string | undefined, activeId: string | null, isChannel = false) => {
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
-    if (!userId || !chatId) return;
+    if (!userId || !activeId) return;
 
-    const channelName = `typing-${[userId, chatId].sort().join('-')}`;
+    // If it's a workspace channel, use channelId, otherwise use sorted direct ids
+    const channelName = isChannel 
+      ? `typing-${activeId}`
+      : `typing-${[userId, activeId].sort().join('-')}`;
+
     const channel = supabase.channel(channelName);
     channelRef.current = channel;
 
     channel
       .on('broadcast', { event: 'typing' }, (payload) => {
-        const { user_id, is_typing } = payload.payload;
+        const { user_id, username, is_typing } = payload.payload;
         if (user_id !== userId) {
           setTypingUsers((prev) => {
             const next = new Set(prev);
             if (is_typing) {
-              next.add(user_id);
+              next.add(username || user_id);
             } else {
-              next.delete(user_id);
+              next.delete(username || user_id);
             }
             return next;
           });
@@ -34,36 +38,36 @@ export const useTypingIndicator = (userId: string | undefined, chatId: string | 
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [userId, chatId]);
+  }, [userId, activeId, isChannel]);
 
   const sendTypingStatus = useCallback(
-    (isTyping: boolean) => {
-      if (!channelRef.current || !userId || !chatId) return;
+    (isTyping: boolean, username?: string) => {
+      if (!channelRef.current || !userId || !activeId) return;
 
       channelRef.current.send({
         type: 'broadcast',
         event: 'typing',
-        payload: { user_id: userId, is_typing: isTyping },
+        payload: { user_id: userId, username, is_typing: isTyping },
       });
     },
-    [userId, chatId]
+    [userId, activeId]
   );
 
-  const handleTyping = useCallback(() => {
+  const handleTyping = useCallback((username?: string) => {
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    sendTypingStatus(true);
+    sendTypingStatus(true, username);
     typingTimeoutRef.current = setTimeout(() => {
-      sendTypingStatus(false);
+      sendTypingStatus(false, username);
     }, 2000);
   }, [sendTypingStatus]);
 
-  const stopTyping = useCallback(() => {
+  const stopTyping = useCallback((username?: string) => {
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    sendTypingStatus(false);
+    sendTypingStatus(false, username);
   }, [sendTypingStatus]);
 
   return { typingUsers, handleTyping, stopTyping };

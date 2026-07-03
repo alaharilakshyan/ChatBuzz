@@ -48,16 +48,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
+  const fetchProfile = async (userId: string, email?: string) => {
+    let { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
-    if (error) {
-      console.error('Error fetching profile:', error);
-      return null;
+    if (error || !data) {
+      console.warn('Profile not found, building safe default on-the-fly:', error);
+      const emailUsername = email ? email.split('@')[0] : 'user';
+      const userTag = Math.floor(1000 + Math.random() * 9000).toString();
+      
+      const { data: newProfile, error: insertError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          username: `${emailUsername}_${userTag}`,
+          user_tag: userTag,
+          status: 'online'
+        })
+        .select('*')
+        .single();
+      
+      if (insertError) {
+        console.error('Failed to auto-create missing user profile:', insertError);
+        return null;
+      }
+      return newProfile;
     }
     return data;
   };
@@ -66,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
-        fetchProfile(session.user.id).then((profileData) => {
+        fetchProfile(session.user.id, session.user.email).then((profileData) => {
           if (profileData) {
             setProfile(profileData);
               setUser({
@@ -90,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       if (session?.user) {
         setTimeout(() => {
-          fetchProfile(session.user.id).then((profileData) => {
+          fetchProfile(session.user.id, session.user.email).then((profileData) => {
             if (profileData) {
               setProfile(profileData);
               setUser({
@@ -125,7 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       if (data.user) {
-        const profileData = await fetchProfile(data.user.id);
+        const profileData = await fetchProfile(data.user.id, data.user.email);
         if (profileData) {
           setProfile(profileData);
           setUser({
@@ -166,7 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       if (data.user) {
-        const profileData = await fetchProfile(data.user.id);
+        const profileData = await fetchProfile(data.user.id, data.user.email);
         if (profileData) {
           setProfile(profileData);
           setUser({

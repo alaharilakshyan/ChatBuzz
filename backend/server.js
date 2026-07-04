@@ -12,6 +12,7 @@ import userRoutes from './routes/users.js';
 import chatRoutes from './routes/chat.js';
 import workspaceRoutes from './routes/workspaces.js';
 import uploadRoutes from './routes/uploads.js';
+import backupRoutes from './routes/backup.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -24,7 +25,15 @@ app.use('/api/auth', authRoutes); // Webhooks from clerk
 app.use('/api/users', ClerkExpressRequireAuth(), userRoutes);
 app.use('/api/chat', ClerkExpressRequireAuth(), chatRoutes);
 app.use('/api/workspaces', ClerkExpressRequireAuth(), workspaceRoutes);
-app.use('/api/uploads', ClerkExpressRequireAuth(), uploadRoutes);
+app.use('/api/backup', ClerkExpressRequireAuth(), backupRoutes);
+
+// Protect POST /api/uploads/upload, but allow public access to GET /api/uploads/files/:filename
+app.use('/api/uploads', (req, res, next) => {
+  if (req.method === 'GET') {
+    return next();
+  }
+  return ClerkExpressRequireAuth()(req, res, next);
+}, uploadRoutes);
 
 // Socket.io Setup
 const io = new Server(server, {

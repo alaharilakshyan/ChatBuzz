@@ -31,7 +31,7 @@ router.get('/me', async (req, res) => {
 
 router.patch('/me', async (req, res) => {
   try {
-    const allowedUpdates = ['username', 'bio', 'avatar_url'];
+    const allowedUpdates = ['username', 'bio', 'avatar_url', 'publicKey'];
     const updates = {};
     for (const key of allowedUpdates) {
       if (req.body[key] !== undefined) {
@@ -55,6 +55,16 @@ router.get('/search', async (req, res) => {
   try {
     const users = await User.find({ clerkId: { $ne: req.auth.userId } }).select('-clerkId');
     res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('username avatar_url publicKey user_tag');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }

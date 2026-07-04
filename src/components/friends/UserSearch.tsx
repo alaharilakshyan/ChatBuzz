@@ -89,13 +89,13 @@ export const UserSearch = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="pl-9 bg-[#0B1120] border-[#1e293b] focus-visible:ring-1 focus-visible:ring-[#3b82f6] focus-visible:border-[#3b82f6] text-white rounded-[10px] h-12 text-[15px] shadow-sm transition-all placeholder:text-gray-500"
+            className="pl-9 bg-white/50 dark:bg-slate-800/50 border-black/5 dark:border-white/5 focus-visible:ring-[#9AC68A] dark:focus-visible:ring-[#4ADE80] rounded-[10px] h-12 text-[15px] shadow-sm transition-all"
           />
         </div>
         <Button 
           onClick={handleSearch} 
           disabled={searching || !searchQuery.trim()}
-          className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white rounded-[10px] px-7 h-12 font-medium"
+          className="bg-[#9AC68A] dark:bg-[#4ADE80] hover:bg-[#8AB67A] dark:hover:bg-[#22C55E] text-white dark:text-slate-950 rounded-[10px] px-7 h-12 font-bold"
         >
           {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
         </Button>

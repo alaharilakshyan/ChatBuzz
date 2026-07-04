@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useUser, useAuth as useClerkAuth, useClerk } from '@clerk/clerk-react';
+import { generateKeyPair, exportPublicKey, exportPrivateKey } from '@/utils/crypto';
 
 interface Profile {
   id: string;
@@ -83,11 +84,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               user_tag: data.user_tag,
               avatar_url: data.avatar_url,
               avatar: data.avatar_url,
-              bio: data.bio
+              bio: data.bio,
+              publicKey: data.publicKey
             });
+
+            // Key handling
+            let privKey = localStorage.getItem('e2e_privKey');
+            let pubKey = localStorage.getItem('e2e_pubKey');
+            
+            if (!privKey || !pubKey || !data.publicKey) {
+               const keyPair = await generateKeyPair();
+               pubKey = await exportPublicKey(keyPair.publicKey);
+               privKey = await exportPrivateKey(keyPair.privateKey);
+               
+               localStorage.setItem('e2e_privKey', privKey);
+               localStorage.setItem('e2e_pubKey', pubKey);
+               
+               // Update user on backend
+               await fetch(`${import.meta.env.VITE_API_URL}/users/me`, {
+                 method: 'PATCH',
+                 headers: {
+                   'Content-Type': 'application/json',
+                   Authorization: `Bearer ${token}`
+                 },
+                 body: JSON.stringify({ publicKey: pubKey })
+               });
+            } else {
+              // Fallback to clerkUser details if backend is down to prevent infinite redirect loop
+              const p: Profile = {
+                id: clerkUser.id,
+                username: clerkUser.username || clerkUser.firstName || "User",
+                user_tag: "0000",
+                avatar_url: clerkUser.imageUrl,
+                bio: ""
+              };
+              setProfile(p);
+              setUser({
+                id: clerkUser.id,
+                email: clerkUser.primaryEmailAddress?.emailAddress || '',
+                username: p.username,
+                user_tag: p.user_tag,
+                avatar_url: p.avatar_url,
+                avatar: p.avatar_url,
+                bio: p.bio
+              });
+            }
           }
         } catch (err) {
           console.error("Failed to fetch profile", err);
+          // Fallback on throw as well
+          const p: Profile = {
+            id: clerkUser.id,
+            username: clerkUser.username || clerkUser.firstName || "User",
+            user_tag: "0000",
+            avatar_url: clerkUser.imageUrl,
+            bio: ""
+          };
+          setProfile(p);
+          setUser({
+            id: clerkUser.id,
+            email: clerkUser.primaryEmailAddress?.emailAddress || '',
+            username: p.username,
+            user_tag: p.user_tag,
+            avatar_url: p.avatar_url,
+            avatar: p.avatar_url,
+            bio: p.bio
+          });
         } finally {
           setLoading(false);
         }

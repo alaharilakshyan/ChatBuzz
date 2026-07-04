@@ -93,7 +93,7 @@ const Index = () => {
              transition={{ duration: 0.7, delay: 0.2 }}
              className="w-full max-w-[600px] aspect-square flex items-center justify-center"
           >
-             <img src="/auth-doodle.png" alt="Chat illustration" className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-screen dark:[filter:invert(70%)_sepia(100%)_saturate(400%)_hue-rotate(80deg)_brightness(120%)] dark:opacity-90" />
+             <img src="/hero-image.jpg" alt="Chat illustration" className="w-full max-h-[85%] object-cover rounded-[32px] shadow-2xl border border-white/40 dark:border-slate-800/40" />
           </motion.div>
           
           {/* Decorative bubble */}

@@ -26,6 +26,7 @@ import gsap from 'gsap';
 
 interface Message {
   _id: string;
+  id?: string;
   senderId: any;
   receiverId?: string | null;
   groupId?: string | null;
@@ -36,6 +37,12 @@ interface Message {
   expiresAt?: string | null;
   isDeleted?: boolean | null;
   createdAt: string;
+  created_at?: string;
+  sender_id?: string;
+  isOneTimeView?: boolean | null;
+  is_one_time_view?: boolean | null;
+  viewedBy?: string[] | null;
+  viewed_by?: string[] | null;
   sender?: {
     username: string;
     avatar_url: string | null;
@@ -68,6 +75,13 @@ export const ChatInterface = () => {
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // Loading overlay animation using GSAP
+  const loadingOverlayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (isLoading && loadingOverlayRef.current) {
+      gsap.fromTo(loadingOverlayRef.current, { opacity: 0 }, { opacity: 0.8, duration: 0.3 });
+    }
+  }, [isLoading]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isEphemeral, setIsEphemeral] = useState(false);
@@ -93,6 +107,38 @@ export const ChatInterface = () => {
   const selectedFriend = allProfiles.find(p => p.id === selectedFriendId);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+  const normalizeMessage = (msg: any): Message => {
+    const sender = typeof msg?.senderId === 'object' && msg.senderId !== null ? msg.senderId : null;
+    const senderId = typeof msg?.senderId === 'object' && msg.senderId !== null
+      ? (msg.senderId._id || msg.senderId.clerkId || msg.senderId.id || '')
+      : (msg?.senderId || '');
+    const createdAt = msg?.createdAt || msg?.created_at || new Date().toISOString();
+    const viewedBy = Array.isArray(msg?.viewedBy)
+      ? msg.viewedBy
+      : Array.isArray(msg?.viewed_by)
+        ? msg.viewed_by
+        : [];
+
+    return {
+      ...msg,
+      _id: msg?._id || msg?.id || '',
+      id: msg?._id || msg?.id || '',
+      content: typeof msg?.content === 'string' ? msg.content : '',
+      createdAt,
+      created_at: createdAt,
+      senderId,
+      sender_id: senderId,
+      isOneTimeView: Boolean(msg?.isOneTimeView ?? msg?.is_one_time_view),
+      is_one_time_view: Boolean(msg?.isOneTimeView ?? msg?.is_one_time_view),
+      viewedBy,
+      viewed_by: viewedBy,
+      sender: {
+        username: sender?.username || msg?.sender?.username || 'Unknown',
+        avatar_url: sender?.avatar_url || msg?.sender?.avatar_url || null
+      }
+    } as Message;
+  };
 
   useEffect(() => {
     if (panelRef.current) {
@@ -135,7 +181,7 @@ export const ChatInterface = () => {
       const senderId = msg.senderId?._id || msg.senderId;
       
       if (isDM) {
-        if (!( (senderId === user.id && msg.receiverId === activeChannelId) || (senderId === activeChannelId && msg.receiverId === user.id) )) {
+        if (!( (senderId === user?.id && msg.receiverId === activeChannelId) || (senderId === activeChannelId && msg.receiverId === user?.id) )) {
           return;
         }
       } else {
@@ -144,22 +190,8 @@ export const ChatInterface = () => {
 
       setMessages(prev => {
         if (prev.some(m => m._id === msg._id)) return prev;
-        
-        const mappedSender = {
-          username: msg.senderId?.username || 'Unknown',
-          avatar_url: msg.senderId?.avatar_url || null
-        };
-        
-        // Convert to UI format
-        return [...prev, {
-          ...msg,
-          id: msg._id,
-          created_at: msg.createdAt,
-          sender_id: msg.senderId?._id || msg.senderId?.clerkId,
-          is_one_time_view: msg.isOneTimeView,
-          viewed_by: msg.viewedBy,
-          sender: mappedSender
-        } as any];
+
+        return [...prev, normalizeMessage(msg)];
       });
     };
 
@@ -222,18 +254,7 @@ export const ChatInterface = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.map((msg: any) => ({
-          ...msg,
-          id: msg._id,
-          sender_id: msg.senderId?._id || msg.senderId,
-          created_at: msg.createdAt,
-          is_one_time_view: msg.isOneTimeView,
-          viewed_by: msg.viewedBy,
-          sender: {
-            username: msg.senderId?.username || 'Unknown',
-            avatar_url: msg.senderId?.avatar_url || null
-          }
-        })));
+        setMessages((data || []).map((msg: any) => normalizeMessage(msg)));
       }
     } catch (err) {
       console.error('Failed to fetch messages', err);
@@ -351,6 +372,11 @@ export const ChatInterface = () => {
     f.username.toLowerCase().includes(sidebarSearch.toLowerCase())
   );
 
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredMessages = messages.filter(msg =>
+    !normalizedSearchQuery || (typeof msg.content === 'string' && msg.content.toLowerCase().includes(normalizedSearchQuery))
+  );
+
   const isTyping = typingUsers.size > 0;
   const typingListText = Array.from(typingUsers).join(', ');
 
@@ -450,7 +476,7 @@ export const ChatInterface = () => {
                 onBack={() => { setActiveChannelId(null); setSelectedFriendId(null); }}
               />
               <ChatMessages
-                messages={messages.filter(msg => searchQuery ? msg.content.toLowerCase().includes(searchQuery.toLowerCase()) : true) as any}
+                messages={filteredMessages as any}
                 currentUserId={user.id}
                 otherUserId={activeChannelId}
                 isLoading={isLoading}
@@ -516,10 +542,10 @@ export const ChatInterface = () => {
       )}
       <CallDialog open={!!callUser} onOpenChange={(open) => !open && setCallUser(null)} user={callUser as any} isVideo={isVideoCall} />
       <Dialog open={showAddContact} onOpenChange={setShowAddContact}>
-        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden bg-[#0B1120] border-[#1e293b] shadow-2xl rounded-2xl gap-0">
-          <div className="h-16 w-full bg-gradient-to-r from-blue-500 to-purple-500 mx-6 mt-6 rounded-sm max-w-[calc(100%-48px)]" />
+        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/60 dark:border-slate-800/50 shadow-2xl rounded-[28px] gap-0">
+          <div className="h-16 w-full bg-gradient-to-r from-[#9AC68A] to-[#8AB67A] dark:from-[#4ADE80] dark:to-[#22C55E] mx-6 mt-6 rounded-[16px] max-w-[calc(100%-48px)]" />
           <div className="p-6 pt-4">
-            <p className="text-gray-300 text-[15px] mb-6">
+            <p className="text-gray-500 dark:text-gray-300 text-[15px] mb-6">
               Search for friends using their username or unique ID tag
               (e.g. username#tag).
             </p>

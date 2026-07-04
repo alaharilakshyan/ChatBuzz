@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useSocket } from '@/contexts/SocketContext';
 
 interface OneTimeViewImageProps {
   imageUrl: string;
@@ -24,6 +24,7 @@ export const OneTimeViewImage: React.FC<OneTimeViewImageProps> = ({
   const [hasViewed, setHasViewed] = useState(viewedBy.includes(currentUserId));
   const [countdown, setCountdown] = useState(5);
   const { toast } = useToast();
+  const { socket } = useSocket();
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Prevent screenshots with CSS
@@ -91,14 +92,8 @@ export const OneTimeViewImage: React.FC<OneTimeViewImageProps> = ({
     setCountdown(5);
 
     if (!isSender && !hasViewed) {
-      // Mark as viewed in database
-      const { error } = await supabase
-        .from('messages')
-        .update({ viewed_by: [...viewedBy, currentUserId] })
-        .eq('id', messageId);
-
-      if (error) {
-        console.error('Error marking as viewed:', error);
+      if (socket) {
+        socket.emit('mark_message_viewed', { messageId, userId: currentUserId });
       }
     }
   };

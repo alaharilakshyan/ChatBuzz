@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Card } from '@/components/ui/card';
 import { Check, X, Loader2 } from 'lucide-react';
 
 interface FriendRequest {
@@ -31,99 +29,36 @@ export const FriendRequests = () => {
   const fetchRequests = async () => {
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from('friends')
-      .select(`
-        id,
-        user_id,
-        friend_id,
-        status,
-        created_at,
-        profiles!friends_user_id_fkey (
-          id,
-          username,
-          user_tag,
-          avatar_url
-        )
-      `)
-      .eq('friend_id', user.id)
-      .eq('status', 'pending');
-
-    if (error) {
-      console.error('Error fetching friend requests:', error);
-    } else {
-      setRequests(data || []);
-    }
+    // TODO: Connect to backend API
+    setRequests([]);
     setLoading(false);
   };
 
   useEffect(() => {
     fetchRequests();
-
-    const channel = supabase
-      .channel('friend-requests')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'friends',
-          filter: `friend_id=eq.${user?.id}`,
-        },
-        () => {
-          fetchRequests();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [user]);
 
   const handleAccept = async (requestId: string) => {
     setProcessingId(requestId);
-    const { error } = await supabase
-      .from('friends')
-      .update({ status: 'accepted' })
-      .eq('id', requestId);
+    
+    // TODO: Connect to backend API
+    toast({
+      title: "Notice",
+      description: "Friend requests API not yet connected.",
+    });
 
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to accept friend request",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Success",
-        description: "Friend request accepted",
-      });
-      fetchRequests();
-    }
     setProcessingId(null);
   };
 
   const handleReject = async (requestId: string) => {
     setProcessingId(requestId);
-    const { error } = await supabase
-      .from('friends')
-      .delete()
-      .eq('id', requestId);
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to reject friend request",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Success",
-        description: "Friend request rejected",
-      });
-      fetchRequests();
-    }
+    
+    // TODO: Connect to backend API
+    toast({
+      title: "Notice",
+      description: "Friend requests API not yet connected.",
+    });
+    
     setProcessingId(null);
   };
 

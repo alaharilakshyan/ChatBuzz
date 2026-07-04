@@ -7,7 +7,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Users, Plus, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -42,33 +41,10 @@ export const CreateGroupDialog: React.FC<CreateGroupDialogProps> = ({ onGroupCre
     if (!user) return;
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from('friends')
-      .select(`
-        friend:profiles!friends_friend_id_fkey(id, username, avatar_url, user_tag),
-        user:profiles!friends_user_id_fkey(id, username, avatar_url, user_tag)
-      `)
-      .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
-      .eq('status', 'accepted');
-
-    if (error) {
-      console.error('Error fetching friends:', error);
-    } else {
-      const friendsList: Friend[] = [];
-      data?.forEach((item: any) => {
-        if (item.friend && item.friend.id !== user.id) {
-          friendsList.push(item.friend);
-        }
-        if (item.user && item.user.id !== user.id) {
-          friendsList.push(item.user);
-        }
-      });
-      // Remove duplicates
-      const uniqueFriends = friendsList.filter((friend, index, self) =>
-        index === self.findIndex((f) => f.id === friend.id)
-      );
-      setFriends(uniqueFriends);
-    }
+    // TODO: Connect to backend API for friends list
+    // Mocking an empty list for now since friends API doesn't exist yet
+    setFriends([]);
+    
     setLoading(false);
   };
 
@@ -92,58 +68,12 @@ export const CreateGroupDialog: React.FC<CreateGroupDialogProps> = ({ onGroupCre
 
     setCreating(true);
 
-    // Create the group
-    const { data: group, error: groupError } = await supabase
-      .from('groups')
-      .insert({
-        name: groupName.trim(),
-        created_by: user.id
-      })
-      .select()
-      .single();
-
-    if (groupError) {
-      console.error('Error creating group:', groupError);
-      toast({
-        title: 'Error',
-        description: 'Failed to create group',
-        variant: 'destructive'
-      });
-      setCreating(false);
-      return;
-    }
-
-    // Add creator as admin
-    const { error: adminError } = await supabase
-      .from('group_members')
-      .insert({
-        group_id: group.id,
-        user_id: user.id,
-        role: 'admin'
-      });
-
-    if (adminError) {
-      console.error('Error adding admin:', adminError);
-    }
-
-    // Add selected friends as members
-    const memberInserts = selectedFriends.map(friendId => ({
-      group_id: group.id,
-      user_id: friendId,
-      role: 'member'
-    }));
-
-    const { error: membersError } = await supabase
-      .from('group_members')
-      .insert(memberInserts);
-
-    if (membersError) {
-      console.error('Error adding members:', membersError);
-    }
-
+    // TODO: Connect to backend API for group creation
+    await new Promise(r => setTimeout(r, 1000));
+    
     toast({
-      title: 'Group created!',
-      description: `${groupName} has been created with ${selectedFriends.length + 1} members`
+      title: 'Group created (Mocked)',
+      description: `${groupName} has been created`
     });
 
     setIsOpen(false);

@@ -1,7 +1,7 @@
 import React, { KeyboardEvent, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Paperclip, X, Mic, StopCircle, Flame } from 'lucide-react';
+import { Send, Paperclip, X, Mic, StopCircle, Flame, Eye } from 'lucide-react';
 import { useVoiceRecording } from '@/hooks/useVoiceRecording';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,8 @@ interface ChatInputProps {
   onVoiceRecordingComplete?: (file: File) => void;
   isEphemeral?: boolean;
   onEphemeralToggle?: (enabled: boolean) => void;
+  isOneTimeView?: boolean;
+  onOneTimeViewToggle?: (enabled: boolean) => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -30,6 +32,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onVoiceRecordingComplete,
   isEphemeral = false,
   onEphemeralToggle,
+  isOneTimeView = false,
+  onOneTimeViewToggle,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { isRecording, recordingTime, startRecording, stopRecording, cancelRecording } = useVoiceRecording();
@@ -76,10 +80,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const isImage = selectedFile && selectedFile.type.startsWith('image/');
+  const isVideo = selectedFile && selectedFile.type.startsWith('video/');
   const previewUrl = selectedFile ? URL.createObjectURL(selectedFile) : null;
 
   return (
-    <div className="p-4 border-t border-[#1A2421]/10 bg-white/60 backdrop-blur-xl">
+    <div className="p-4 border-t border-white/40 dark:border-slate-700/50 bg-white/40 dark:bg-slate-800/40 backdrop-blur-xl">
       {isRecording && (
         <div className="mb-2 p-3 bg-red-50 text-red-700 border border-red-100 rounded-2xl flex items-center gap-3">
           <div className="flex-1 flex items-center gap-2">
@@ -105,6 +110,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 src={previewUrl} 
                 alt="Preview" 
                 className="max-h-32 object-cover"
+              />
+            </div>
+          )}
+          {isVideo && previewUrl && (
+            <div className="relative max-w-xs rounded-xl overflow-hidden border border-[#1A2421]/10 bg-black/5">
+              <video 
+                src={previewUrl} 
+                className="max-h-32 object-cover"
+                controls
               />
             </div>
           )}
@@ -138,7 +152,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           size="icon"
           onClick={handleFileClick}
           disabled={isDisabled || isRecording}
-          className="shrink-0 h-12 w-12 rounded-2xl border-[#1A2421]/10 bg-white hover:bg-[#0C1412]/5 text-[#1A2421]/60 hover:text-[#0C1412] shadow-sm transition-all duration-200"
+          className="shrink-0 h-12 w-12 rounded-[20px] border-white/60 dark:border-slate-700/50 bg-white/50 dark:bg-slate-900/50 hover:bg-white/80 dark:hover:bg-slate-800/80 text-gray-500 dark:text-gray-400 hover:text-[#9AC68A] dark:hover:text-[#4ADE80] shadow-sm transition-all duration-200"
         >
           <Paperclip className="h-5 w-5" />
         </Button>
@@ -148,7 +162,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyPress}
           placeholder={isRecording ? "Recording vocal..." : "Write a message..."}
-          className="min-h-[48px] max-h-[120px] resize-none neumorphic-input rounded-2xl py-3 px-4 text-sm text-[#0C1412] placeholder-[#1A2421]/40 border-[#1A2421]/10 focus:border-[#0C1412] focus-visible:ring-0 focus-visible:ring-offset-0 flex-1 scrollbar-thin"
+          className="min-h-[48px] max-h-[120px] resize-none rounded-[20px] py-3 px-5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 bg-white/50 dark:bg-slate-900/50 border border-white/60 dark:border-slate-700/50 focus-visible:ring-1 focus-visible:ring-[#9AC68A] dark:focus-visible:ring-[#4ADE80] focus-visible:ring-offset-0 flex-1 scrollbar-thin shadow-sm transition-colors"
           disabled={isDisabled || isRecording}
         />
 
@@ -168,15 +182,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         )}
         
+        {/* One Time View mode switch */}
+        {onOneTimeViewToggle && selectedFile && isImage && (
+          <div className="flex flex-col items-center gap-1 shrink-0 px-1 pb-1">
+            <Label htmlFor="one-time-mode" className="cursor-pointer text-[9px] uppercase tracking-wider font-bold text-[#1A2421]/50 flex items-center gap-0.5">
+              <Eye className={`w-3.5 h-3.5 ${isOneTimeView ? "text-blue-500 fill-current" : ""}`} />
+              1x View
+            </Label>
+            <Switch
+              id="one-time-mode"
+              checked={isOneTimeView}
+              onCheckedChange={onOneTimeViewToggle}
+              className="scale-90"
+            />
+          </div>
+        )}
+        
         {!value.trim() && !selectedFile ? (
           <Button
             size="icon"
             onClick={handleVoiceRecord}
             disabled={isDisabled}
-            className={`shrink-0 h-12 w-12 rounded-2xl shadow-sm transition-all duration-300 ${
+            className={`shrink-0 h-12 w-12 rounded-full shadow-md transition-all duration-300 ${
               isRecording 
                 ? "bg-red-600 hover:bg-red-700 text-white" 
-                : "bg-[#0C1412] hover:bg-[#1A2421] text-white"
+                : "bg-[#9AC68A] dark:bg-[#4ADE80] hover:bg-[#8AB67A] dark:hover:bg-[#22C55E] text-white dark:text-slate-950"
             }`}
           >
             {isRecording ? <StopCircle className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
@@ -186,7 +216,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             size="icon"
             onClick={onSend}
             disabled={(!value.trim() && !selectedFile) || isDisabled}
-            className="shrink-0 h-12 w-12 rounded-2xl bg-[#0C1412] hover:bg-[#1A2421] text-white shadow-sm transition-transform duration-200 active:scale-95"
+            className="shrink-0 h-12 w-12 rounded-full bg-[#9AC68A] dark:bg-[#4ADE80] hover:bg-[#8AB67A] dark:hover:bg-[#22C55E] text-white dark:text-slate-950 shadow-md transition-transform duration-200 active:scale-95"
           >
             <Send className="h-5 w-5" />
           </Button>

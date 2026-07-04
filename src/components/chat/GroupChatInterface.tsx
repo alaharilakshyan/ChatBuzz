@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { useSocket } from '@/contexts/SocketContext';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -60,6 +60,7 @@ export const GroupChatInterface: React.FC<GroupChatInterfaceProps> = ({
   onBack,
 }) => {
   const { user } = useAuth();
+  const { socket } = useSocket();
   const { toast } = useToast();
   const [group, setGroup] = useState<GroupInfo | null>(null);
   const [messages, setMessages] = useState<GroupMessage[]>([]);
@@ -75,166 +76,96 @@ export const GroupChatInterface: React.FC<GroupChatInterfaceProps> = ({
       fetchGroupInfo();
       fetchMessages();
       
-      const channel = supabase
-        .channel(`group-messages-${groupId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-            filter: `group_id=eq.${groupId}`,
-          },
-          async (payload) => {
-            const { data: senderData } = await supabase
-              .from('profiles')
-              .select('username, avatar_url')
-              .eq('id', payload.new.sender_id)
-              .single();
-            
-            setMessages((prev) => [...prev, { ...payload.new, sender: senderData } as GroupMessage]);
-          }
-        )
-        .subscribe();
+      if (socket) {
+        socket.emit('join_chat', groupId);
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
+        const handleNewMessage = (payload: any) => {
+          if (payload.groupId === groupId) {
+            setMessages((prev) => [...prev, {
+              id: payload._id,
+              sender_id: payload.senderId?._id || payload.senderId,
+              content: payload.content,
+              file_url: payload.attachments?.[0]?.url || null,
+              file_name: payload.attachments?.[0]?.name || null,
+              is_deleted: payload.isDeleted || false,
+              created_at: payload.createdAt,
+              sender: {
+                username: payload.senderId?.username || 'Unknown',
+                avatar_url: payload.senderId?.avatar_url || null
+              }
+            }]);
+          }
+        };
+
+        socket.on('new_message', handleNewMessage);
+
+        return () => {
+          socket.off('new_message', handleNewMessage);
+        };
+      }
     }
-  }, [groupId]);
+  }, [groupId, socket]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const fetchGroupInfo = async () => {
-    const { data: groupData, error: groupError } = await supabase
-      .from('groups')
-      .select('*')
-      .eq('id', groupId)
-      .single();
-
-    if (groupError) {
-      console.error('Error fetching group:', groupError);
-      return;
-    }
-
-    const { data: membersData } = await supabase
-      .from('group_members')
-      .select(`
-        user_id,
-        role,
-        profiles:user_id(username, avatar_url)
-      `)
-      .eq('group_id', groupId);
-
+    // TODO: Connect to backend API
     setGroup({
-      ...groupData,
-      members: membersData?.map((m: any) => ({
-        user_id: m.user_id,
-        username: m.profiles?.username,
-        avatar_url: m.profiles?.avatar_url,
-        role: m.role,
-      })) || [],
+      id: groupId,
+      name: 'Group Chat',
+      avatar_url: null,
+      created_by: 'unknown',
+      members: []
     });
   };
 
   const fetchMessages = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('messages')
-      .select(`
-        *,
-        sender:profiles!sender_id(username, avatar_url)
-      `)
-      .eq('group_id', groupId)
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching messages:', error);
-    } else {
-      setMessages(data || []);
-    }
+    // TODO: Connect to backend API
+    setMessages([]);
     setIsLoading(false);
   };
 
   const handleSendMessage = async () => {
-    if (!user || (!newMessage.trim() && !selectedFile) || isSending) return;
+    if (!user || (!newMessage.trim() && !selectedFile) || isSending || !socket) return;
     setIsSending(true);
 
-    let fileUrl = null;
-    let fileName = null;
+    let attachmentsPayload = [];
 
     if (selectedFile) {
-      const fileExt = selectedFile.name.split('.').pop();
-      const filePath = `groups/${groupId}/${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('chat-files')
-        .upload(filePath, selectedFile);
-
-      if (uploadError) {
-        toast({
-          title: 'Error',
-          description: 'Failed to upload file',
-          variant: 'destructive',
-        });
-        setIsSending(false);
-        return;
-      }
-
-      const { data: urlData } = supabase.storage
-        .from('chat-files')
-        .getPublicUrl(filePath);
-
-      fileUrl = urlData.publicUrl;
-      fileName = selectedFile.name;
-    }
-
-    const { error } = await supabase.from('messages').insert({
-      sender_id: user.id,
-      receiver_id: user.id, // Self-reference for group messages
-      group_id: groupId,
-      content: newMessage.trim() || (selectedFile ? 'Sent a file' : ''),
-      file_url: fileUrl,
-      file_name: fileName,
-    });
-
-    if (error) {
-      console.error('Error sending message:', error);
+      // TODO: Connect to upload API endpoint
       toast({
         title: 'Error',
-        description: 'Failed to send message',
+        description: 'Upload endpoint not fully implemented here yet',
         variant: 'destructive',
       });
-    } else {
-      setNewMessage('');
-      setSelectedFile(null);
+      setIsSending(false);
+      return;
     }
 
+    const payload = {
+      senderId: user.id,
+      receiverId: null,
+      groupId: groupId,
+      content: newMessage.trim() || (selectedFile ? 'Sent a file' : ''),
+      attachments: attachmentsPayload,
+    };
+
+    socket.emit('send_message', payload);
+
+    setNewMessage('');
+    setSelectedFile(null);
     setIsSending(false);
   };
 
   const handleDeleteMessage = async (messageId: string) => {
-    const { error } = await supabase
-      .from('messages')
-      .update({ is_deleted: true, content: 'This message was deleted' })
-      .eq('id', messageId)
-      .eq('sender_id', user?.id);
-
-    if (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete message',
-        variant: 'destructive',
-      });
-    } else {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId ? { ...m, is_deleted: true, content: 'This message was deleted' } : m
-        )
-      );
-    }
+    // TODO: Connect to backend API
+    toast({
+      title: 'Notice',
+      description: 'Delete endpoint not yet implemented',
+    });
   };
 
   if (!group) {
@@ -316,7 +247,7 @@ export const GroupChatInterface: React.FC<GroupChatInterfaceProps> = ({
                       </>
                     )}
                     <p className={`text-[10px] mt-1 ${isSent ? 'text-white/60' : 'text-muted-foreground'}`}>
-                      {format(new Date(message.created_at), 'HH:mm')}
+                      {message.created_at ? format(new Date(message.created_at), 'HH:mm') : ''}
                     </p>
                   </div>
                   {isSent && !message.is_deleted && (

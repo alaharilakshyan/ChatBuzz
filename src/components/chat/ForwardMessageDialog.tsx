@@ -11,10 +11,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Send, Search, Loader2, Users } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { encryptMessage } from '@/utils/encryption';
 
 interface ForwardTarget {
   id: string;
@@ -59,48 +57,9 @@ export const ForwardMessageDialog: React.FC<ForwardMessageDialogProps> = ({
     if (!user) return;
     setLoading(true);
 
-    // Fetch friends
-    const { data: sentFriends } = await supabase
-      .from('friends')
-      .select('profiles:friend_id(id, username, avatar_url)')
-      .eq('user_id', user.id)
-      .eq('status', 'accepted');
+    // TODO: Connect to backend API
+    setTargets([]);
 
-    const { data: receivedFriends } = await supabase
-      .from('friends')
-      .select('profiles:user_id(id, username, avatar_url)')
-      .eq('friend_id', user.id)
-      .eq('status', 'accepted');
-
-    // Fetch groups
-    const { data: groups } = await supabase
-      .from('group_members')
-      .select('group:groups(id, name, avatar_url)')
-      .eq('user_id', user.id);
-
-    const friendTargets: ForwardTarget[] = [
-      ...(sentFriends?.map((f: any) => ({
-        id: f.profiles?.id,
-        name: f.profiles?.username,
-        avatar_url: f.profiles?.avatar_url,
-        type: 'user' as const,
-      })).filter((t: any) => t.id) || []),
-      ...(receivedFriends?.map((f: any) => ({
-        id: f.profiles?.id,
-        name: f.profiles?.username,
-        avatar_url: f.profiles?.avatar_url,
-        type: 'user' as const,
-      })).filter((t: any) => t.id) || []),
-    ];
-
-    const groupTargets: ForwardTarget[] = groups?.map((g: any) => ({
-      id: g.group?.id,
-      name: g.group?.name,
-      avatar_url: g.group?.avatar_url,
-      type: 'group' as const,
-    })).filter((t: any) => t.id) || [];
-
-    setTargets([...friendTargets, ...groupTargets]);
     setLoading(false);
   };
 
@@ -117,28 +76,10 @@ export const ForwardMessageDialog: React.FC<ForwardMessageDialogProps> = ({
     setForwarding(true);
 
     try {
-      for (const targetId of selectedTargets) {
-        const target = targets.find((t) => t.id === targetId);
-        if (!target) continue;
-
-        const forwardedContent = `↪️ Forwarded: ${message.content}`;
-        const encryptedContent = target.type === 'user' 
-          ? await encryptMessage(forwardedContent, user.id, targetId)
-          : forwardedContent;
-
-        await supabase.from('messages').insert({
-          sender_id: user.id,
-          receiver_id: target.type === 'user' ? targetId : user.id,
-          group_id: target.type === 'group' ? targetId : null,
-          content: encryptedContent,
-          file_url: message.file_url,
-          file_name: message.file_name,
-        });
-      }
-
+      // TODO: Connect to backend API
       toast({
-        title: 'Message forwarded',
-        description: `Sent to ${selectedTargets.length} chat(s)`,
+        title: 'Notice',
+        description: `Forwarding not connected yet`,
       });
       onOpenChange(false);
     } catch (error) {

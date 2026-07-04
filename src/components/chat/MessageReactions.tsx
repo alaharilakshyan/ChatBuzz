@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -26,61 +25,11 @@ export const MessageReactions: React.FC<MessageReactionsProps> = ({ messageId, c
 
   useEffect(() => {
     fetchReactions();
-
-    // Subscribe to reaction changes
-    const channel = supabase
-      .channel(`reactions-${messageId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'reactions',
-          filter: `message_id=eq.${messageId}`,
-        },
-        () => {
-          fetchReactions();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [messageId]);
 
   const fetchReactions = async () => {
-    const { data, error } = await supabase
-      .from('reactions')
-      .select('*')
-      .eq('message_id', messageId);
-
-    if (error) {
-      console.error('Error fetching reactions:', error);
-      return;
-    }
-
-    // Group reactions by emoji
-    const grouped = data.reduce((acc: any, reaction: any) => {
-      if (!acc[reaction.emoji]) {
-        acc[reaction.emoji] = {
-          id: reaction.id,
-          emoji: reaction.emoji,
-          user_id: reaction.user_id,
-          users: [],
-        };
-      }
-      acc[reaction.emoji].users.push(reaction.user_id);
-      return acc;
-    }, {});
-
-    const reactionsList = Object.values(grouped).map((r: any) => ({
-      ...r,
-      count: r.users.length,
-      hasReacted: r.users.includes(currentUserId),
-    }));
-
-    setReactions(reactionsList);
+    // TODO: Connect to backend API for reactions
+    setReactions([]);
   };
 
   const handleReaction = async (emoji: string) => {
@@ -88,40 +37,13 @@ export const MessageReactions: React.FC<MessageReactionsProps> = ({ messageId, c
     setLoading(true);
 
     try {
-      // Check if user already reacted with this emoji
-      const existingReaction = reactions.find(
-        (r) => r.emoji === emoji && (r as any).hasReacted
-      );
-
-      if (existingReaction) {
-        // Remove reaction
-        const { error } = await supabase
-          .from('reactions')
-          .delete()
-          .eq('message_id', messageId)
-          .eq('user_id', currentUserId)
-          .eq('emoji', emoji);
-
-        if (error) throw error;
-      } else {
-        // Add reaction
-        const { error } = await supabase
-          .from('reactions')
-          .insert({
-            message_id: messageId,
-            user_id: currentUserId,
-            emoji,
-          });
-
-        if (error) throw error;
-      }
+      // TODO: Connect to backend API for toggling reactions
+      toast({
+        title: 'Notice',
+        description: 'Reactions not yet implemented with new API',
+      });
     } catch (error) {
       console.error('Error updating reaction:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update reaction',
-        variant: 'destructive',
-      });
     } finally {
       setLoading(false);
     }

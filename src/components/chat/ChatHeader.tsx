@@ -45,7 +45,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const [showSearch, setShowSearch] = React.useState(false);
 
   return (
-    <div className="border-b border-border/50 backdrop-blur-xl bg-card/80">
+    <div className="border-b border-white/40 dark:border-slate-700/50 backdrop-blur-xl bg-white/40 dark:bg-slate-800/40 rounded-t-[28px]">
       <div className="p-3 md:p-4 flex items-center gap-2 md:gap-4">
         {onBack && (
           <Button
@@ -69,28 +69,28 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               </AvatarFallback>
             </Avatar>
             {isOnline && (
-              <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-card rounded-full animate-pulse" />
+              <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#4ADE80] border-2 border-white dark:border-slate-800 rounded-full animate-pulse" />
             )}
           </div>
           
           <div className="flex-1 min-w-0">
-            <h2 className="font-bold text-base md:text-lg truncate">
+            <h2 className="font-bold text-base md:text-lg truncate text-gray-900 dark:text-white">
               {selectedUser.username}
             </h2>
             <div className="flex items-center gap-1">
               {isTyping ? (
                 <div className="flex items-center gap-1">
-                  <span className="text-xs text-primary font-medium">typing</span>
+                  <span className="text-xs text-[#9AC68A] dark:text-[#4ADE80] font-medium">typing</span>
                   <div className="flex gap-0.5">
-                    <span className="w-1 h-1 rounded-full bg-primary typing-dot" />
-                    <span className="w-1 h-1 rounded-full bg-primary typing-dot" />
-                    <span className="w-1 h-1 rounded-full bg-primary typing-dot" />
+                    <span className="w-1 h-1 rounded-full bg-[#9AC68A] dark:bg-[#4ADE80] typing-dot" />
+                    <span className="w-1 h-1 rounded-full bg-[#9AC68A] dark:bg-[#4ADE80] typing-dot" />
+                    <span className="w-1 h-1 rounded-full bg-[#9AC68A] dark:bg-[#4ADE80] typing-dot" />
                   </div>
                 </div>
               ) : isOnline ? (
-                <span className="text-xs text-emerald-500 font-medium">online</span>
+                <span className="text-xs text-[#9AC68A] dark:text-[#4ADE80] font-medium">online</span>
               ) : (
-                <span className="text-xs text-muted-foreground">offline</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">offline</span>
               )}
             </div>
           </div>

@@ -3,90 +3,33 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Upload } from 'lucide-react';
+import { Loader2, Upload, ArrowLeft, Bell, Lock, Eye } from 'lucide-react';
 import { FeedbackDialog } from '@/components/settings/FeedbackDialog';
+import { useNavigate } from 'react-router-dom';
 
 const Settings = () => {
-  const { user, updateProfile } = useAuth();
+  const { user, getToken } = useAuth();
   const { toast } = useToast();
-  const [username, setUsername] = useState(user?.username || '');
-  const [bio, setBio] = useState(user?.bio || '');
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [uploadingBackground, setUploadingBackground] = useState(false);
+  const navigate = useNavigate();
 
-  const handleSave = async () => {
-    if (!user) return;
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-    setSaving(true);
-    try {
-      await updateProfile({ username, bio });
-      toast({
-        title: "Success",
-        description: "Profile updated successfully",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-    setSaving(false);
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!user || !e.target.files || e.target.files.length === 0) return;
-
-    const file = e.target.files[0];
-    if (file.size > 10 * 1024 * 1024) {
-      toast({
-        title: "Error",
-        description: "File size must be less than 10MB",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setUploading(true);
-    const fileExt = file.name.split('.').pop();
-    const filePath = `${user.id}/${Date.now()}.${fileExt}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file, { upsert: true });
-
-    if (uploadError) {
-      toast({
-        title: "Error",
-        description: "Failed to upload avatar",
-        variant: "destructive",
-      });
-      setUploading(false);
-      return;
-    }
-
-    const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-
-    try {
-      await updateProfile({ avatar_url: data.publicUrl });
-      toast({
-        title: "Success",
-        description: "Avatar updated successfully",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-    setUploading(false);
+  const uploadFile = async (file: File) => {
+    const token = await getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const res = await fetch(`${API_URL}/uploads/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData
+    });
+    
+    if (!res.ok) throw new Error('Failed to upload file');
+    return await res.json();
   };
 
   const handleBackgroundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,183 +37,124 @@ const Settings = () => {
 
     const file = e.target.files[0];
     if (file.size > 10 * 1024 * 1024) {
-      toast({
-        title: "Error",
-        description: "File size must be less than 10MB",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "File size must be less than 10MB", variant: "destructive" });
       return;
     }
 
     setUploadingBackground(true);
-    const fileExt = file.name.split('.').pop();
-    const filePath = `${user.id}/background-${Date.now()}.${fileExt}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file, { upsert: true });
-
-    if (uploadError) {
-      toast({
-        title: "Error",
-        description: "Failed to upload background",
-        variant: "destructive",
-      });
-      setUploadingBackground(false);
-      return;
+    try {
+      const data = await uploadFile(file);
+      localStorage.setItem('chatBackground', data.url);
+      window.dispatchEvent(new Event('storage'));
+      toast({ title: "Success", description: "Chat background updated successfully!" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
-
-    const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-    
-    // Store background URL in localStorage
-    localStorage.setItem('chatBackground', data.publicUrl);
-    
-    // Trigger a storage event to update other tabs/components
-    window.dispatchEvent(new Event('storage'));
-    
-    toast({
-      title: "Success",
-      description: "Chat background updated successfully!",
-    });
     setUploadingBackground(false);
   };
 
   if (!user) return null;
 
   return (
-    <div className="container max-w-2xl mx-auto p-6">
-        <h1 className="text-3xl font-bold mb-6">Settings</h1>
+    <div className="container max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 animate-fade-in relative z-10">
+      <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl">
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back
+      </Button>
 
-        <Card className="p-6 space-y-6">
-          <div className="flex flex-col items-center gap-4">
-            <Avatar className="h-24 w-24">
-              <AvatarImage src={user.avatar_url || undefined} />
-              <AvatarFallback className="text-2xl">
-                {user.username.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <Input
-                id="avatar"
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                className="hidden"
-              />
-              <Label htmlFor="avatar">
-                <Button variant="outline" disabled={uploading} asChild>
-                  <span className="cursor-pointer">
-                    {uploading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Upload className="h-4 w-4 mr-2" />
-                    )}
-                    Change Avatar
-                  </span>
-                </Button>
-              </Label>
-            </div>
+      <div className="mb-8 space-y-2">
+        <h1 className="text-4xl font-extrabold tracking-tight text-[#9AC68A] dark:text-[#4ADE80]">App Settings</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-lg">Customize your chat experience and privacy.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <Card className="p-8 space-y-6 rounded-[32px] border border-white/60 dark:border-slate-800/50 shadow-xl backdrop-blur-xl bg-white/60 dark:bg-slate-900/40 transition-all duration-300">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-[#9AC68A] dark:text-[#4ADE80]">Appearance</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Personalize your workspace background.</p>
           </div>
-
+          
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="usertag">User Tag</Label>
-              <Input
-                id="usertag"
-                value={`#${user.user_tag}`}
-                disabled
-                className="bg-muted"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="bio">Bio</Label>
-              <Textarea
-                id="bio"
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Tell us about yourself"
-                rows={4}
-              />
-            </div>
-
-            <Button onClick={handleSave} disabled={saving} className="w-full">
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Saving...
-                </>
-              ) : (
-                'Save Changes'
-              )}
+            <Input id="background" type="file" accept="image/*" onChange={handleBackgroundUpload} className="hidden" />
+            <Label htmlFor="background">
+              <Button variant="outline" disabled={uploadingBackground} asChild className="w-full h-12 rounded-[16px] shadow-sm hover:border-[#9AC68A] dark:hover:border-[#4ADE80] transition-all bg-white/50 dark:bg-slate-800/50">
+                <span className="cursor-pointer">
+                  {uploadingBackground ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                  Upload Custom Background
+                </span>
+              </Button>
+            </Label>
+            <Button 
+              variant="ghost" 
+              className="w-full h-12 rounded-[16px] text-red-500 hover:bg-red-500/10 hover:text-red-600 transition-colors"
+              onClick={() => {
+                localStorage.removeItem('chatBackground');
+                window.dispatchEvent(new Event('storage'));
+                toast({ title: "Success", description: "Chat background reset to default" });
+              }}
+            >
+              Reset to Default
             </Button>
           </div>
         </Card>
 
-        <Card className="p-6 space-y-4 mt-6">
-          <h2 className="text-xl font-semibold">Chat Customization</h2>
-          
-          <div>
-            <Label htmlFor="background">Chat Background</Label>
-            <Input
-              id="background"
-              type="file"
-              accept="image/*"
-              onChange={handleBackgroundUpload}
-              className="hidden"
-            />
-            <Label htmlFor="background">
-              <Button variant="outline" disabled={uploadingBackground} asChild className="w-full mt-2">
-                <span className="cursor-pointer">
-                  {uploadingBackground ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Upload className="h-4 w-4 mr-2" />
-                  )}
-                  Upload Chat Background
-                </span>
-              </Button>
-            </Label>
-            <p className="text-xs text-muted-foreground mt-2">
-              Upload an image to customize your chat background
-            </p>
+        <Card className="p-8 space-y-6 rounded-[32px] border border-white/60 dark:border-slate-800/50 shadow-xl backdrop-blur-xl bg-white/60 dark:bg-slate-900/40 transition-all duration-300">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-[#9AC68A] dark:text-[#4ADE80] flex items-center gap-2"><Bell className="w-5 h-5"/> Notifications</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Manage when and how you are notified.</p>
           </div>
-
-          <Button 
-            variant="outline" 
-            className="w-full"
-            onClick={() => {
-              localStorage.removeItem('chatBackground');
-              window.dispatchEvent(new Event('storage'));
-              toast({
-                title: "Success",
-                description: "Chat background reset to default",
-              });
-            }}
-          >
-            Reset to Default Background
-          </Button>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-slate-800/50 rounded-[16px]">
+              <div>
+                <p className="font-bold">Push Notifications</p>
+                <p className="text-xs text-gray-500">Receive alerts for new messages</p>
+              </div>
+              <input type="checkbox" className="toggle border-transparent bg-slate-300 dark:bg-slate-700 checked:bg-[#9AC68A]" defaultChecked />
+            </div>
+            <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-slate-800/50 rounded-[16px]">
+              <div>
+                <p className="font-bold">Message Previews</p>
+                <p className="text-xs text-gray-500">Show message content in notifications</p>
+              </div>
+              <input type="checkbox" className="toggle border-transparent bg-slate-300 dark:bg-slate-700 checked:bg-[#9AC68A]" defaultChecked />
+            </div>
+          </div>
+        </Card>
+        
+        <Card className="p-8 space-y-6 rounded-[32px] border border-white/60 dark:border-slate-800/50 shadow-xl backdrop-blur-xl bg-white/60 dark:bg-slate-900/40 transition-all duration-300">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-[#9AC68A] dark:text-[#4ADE80] flex items-center gap-2"><Lock className="w-5 h-5"/> Privacy</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Manage who can interact with you.</p>
+          </div>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-slate-800/50 rounded-[16px]">
+              <div>
+                <p className="font-bold">Online Status</p>
+                <p className="text-xs text-gray-500">Let others see when you're online</p>
+              </div>
+              <input type="checkbox" className="toggle border-transparent bg-slate-300 dark:bg-slate-700 checked:bg-[#9AC68A]" defaultChecked />
+            </div>
+            <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-slate-800/50 rounded-[16px]">
+              <div>
+                <p className="font-bold">Read Receipts</p>
+                <p className="text-xs text-gray-500">Show when you've read messages</p>
+              </div>
+              <input type="checkbox" className="toggle border-transparent bg-slate-300 dark:bg-slate-700 checked:bg-[#9AC68A]" defaultChecked />
+            </div>
+          </div>
         </Card>
 
-        <Card className="p-6 space-y-4 mt-6">
-          <h2 className="text-xl font-semibold">Help & Support</h2>
-          <p className="text-sm text-muted-foreground">
-            Encountered an issue or have a suggestion? Let us know!
-          </p>
-          <FeedbackDialog />
+        <Card className="p-8 space-y-6 rounded-[32px] border border-white/60 dark:border-slate-800/50 shadow-xl backdrop-blur-xl bg-white/60 dark:bg-slate-900/40 transition-all duration-300">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-[#9AC68A] dark:text-[#4ADE80]">Help & Support</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Encountered an issue or have a suggestion?</p>
+          </div>
+          <div className="pt-2">
+            <FeedbackDialog />
+          </div>
         </Card>
       </div>
+    </div>
   );
 };
-
 export default Settings;

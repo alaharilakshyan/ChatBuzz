@@ -1,258 +1,110 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageCircle, Users, Zap, Shield, ArrowRight, Sparkles, Ghost, Hexagon, Fingerprint } from 'lucide-react';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { ArrowRight, MessageCircle, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Index = () => {
   const { user } = useAuth();
 
-  const features = [
-    {
-      icon: MessageCircle,
-      title: "Real-time Messaging",
-      description: "Instant message delivery with organic websocket connections for seamless communication.",
-      gradient: "from-[#a8d5ba] to-[#88c5a6]" // Sage greens
-    },
-    {
-      icon: Ghost,
-      title: "Ephemeral Mode",
-      description: "Snapchat-style disappearing messages for private, temporary conversations.",
-      gradient: "from-[#f4d06f] to-[#ffb627]" // Yellows
-    },
-    {
-      icon: Hexagon,
-      title: "Workspace Fabric",
-      description: "Discord-style servers, channels, and threaded replies for robust community building.",
-      gradient: "from-[#a0c4ff] to-[#73a5ff]" // Soft Blues
-    },
-    {
-      icon: Fingerprint,
-      title: "End-to-end Secure",
-      description: "Military-grade encryption securing every text, image, and voice note.",
-      gradient: "from-[#e4c1f9] to-[#d0a5f9]" // Soft Purples
-    }
-  ];
-
-  // Animation variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: { 
-        staggerChildren: 0.15,
-        delayChildren: 0.2
-      } 
-    }
-  };
-
-  const itemVariants = {
-    hidden: { y: 30, opacity: 0 },
-    visible: { 
-      y: 0, 
-      opacity: 1, 
-      transition: { type: 'spring', stiffness: 100, damping: 15 } 
-    }
-  };
-
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex flex-col font-sans overflow-x-hidden selection:bg-primary/20">
+    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans text-black dark:text-white overflow-hidden flex flex-col transition-colors duration-300">
       
-      {/* Background ambient light */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1000px] h-[500px] bg-gradient-to-b from-[#a8d5ba]/20 via-[#a0c4ff]/10 to-transparent blur-[100px] -z-10 pointer-events-none" />
+      {/* Top Bar (No logo) */}
+      <nav className="w-full max-w-7xl mx-auto px-8 py-6 flex items-center justify-between z-50 bg-white dark:bg-slate-950 transition-colors duration-300">
+        <div className="flex items-center gap-2 text-black dark:text-white">
+          <MessageCircle className="w-8 h-8 text-[#9AC68A] dark:text-[#4ADE80]" />
+          <span className="font-bold text-xl tracking-tight">ChatBuzz</span>
+        </div>
+        <div className="sm:hidden"></div>
+
+        <div className="flex items-center gap-4">
+          <ThemeToggle />
+          {!user && (
+            <Link to="/login" className="text-[15px] font-medium text-black dark:text-white hover:underline">
+              Log in
+            </Link>
+          )}
+          <Link 
+            to={user ? "/chat" : "/register"} 
+            className="text-[15px] font-semibold bg-black dark:bg-[#4ADE80] text-white dark:text-black px-6 py-2.5 rounded-full hover:bg-black/90 dark:hover:bg-[#22C55E] transition-colors"
+          >
+            {user ? "Go to chat" : "Sign up"}
+          </Link>
+        </div>
+      </nav>
 
       {/* Hero Section */}
-      <section className="flex-1 flex flex-col lg:flex-row items-center justify-center px-4 sm:px-8 py-16 sm:py-24 max-w-7xl mx-auto w-full gap-12 lg:gap-8">
+      <main className="flex-1 flex flex-col lg:flex-row w-full h-full relative">
         
-        {/* Hero Content */}
-        <motion.div 
-          className="flex-1 space-y-8 lg:pr-10 text-center lg:text-left z-10"
-          initial="hidden"
-          animate="visible"
-          variants={containerVariants}
-        >
-          <motion.div variants={itemVariants} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/50 backdrop-blur-md border border-black/5 shadow-sm">
-            <Sparkles className="w-4 h-4 text-[#88c5a6]" />
-            <span className="text-sm font-semibold tracking-wide text-zinc-600">The Next Generation of Communication</span>
-          </motion.div>
-          
-          <motion.h1 variants={itemVariants} className="text-5xl sm:text-6xl md:text-7xl font-extrabold leading-[1.1] tracking-tight text-zinc-900">
-            Communicate with <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#88c5a6] via-[#6ba58b] to-[#a0c4ff]">
-              Absolute Fluidity.
-            </span>
-          </motion.h1>
-          
-          <motion.p variants={itemVariants} className="text-lg sm:text-xl text-zinc-500 max-w-2xl mx-auto lg:mx-0 leading-relaxed font-medium">
-            A premium, ultra-fast chat experience fusing the best of Discord, Instagram, and Snapchat. 
-            Beautifully designed, effortlessly intuitive.
-          </motion.p>
-
-          {/* CTA Buttons */}
-          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
-            <Button 
-              asChild 
-              size="lg" 
-              className="w-full sm:w-auto bg-zinc-900 hover:bg-zinc-800 text-white border-0 px-8 py-7 text-lg rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 group"
-            >
-              <Link to="/chat">
-                Start Chatting
-                <ArrowRight className="ml-3 h-5 w-5 group-hover:translate-x-1.5 transition-transform" />
-              </Link>
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              size="lg"
-              className="w-full sm:w-auto border-zinc-200 bg-white/50 backdrop-blur-md hover:bg-white hover:border-zinc-300 px-8 py-7 text-lg rounded-2xl transition-all duration-300 shadow-sm"
-            >
-              Explore Features
-            </Button>
-          </motion.div>
-
-          {/* User Welcome */}
-          {user && (
-            <motion.div variants={itemVariants} className="mt-8 p-5 rounded-2xl bg-white/60 backdrop-blur-xl border border-zinc-100 max-w-md mx-auto lg:mx-0 shadow-sm">
-              <p className="text-base font-medium text-zinc-700">
-                Welcome back, <span className="font-bold text-[#88c5a6]">{user.username}</span>! 
-                Your workspaces are ready.
-              </p>
-            </motion.div>
-          )}
-        </motion.div>
-
-        {/* Hero Image / Interactive Element */}
-        <motion.div 
-          className="flex-1 w-full max-w-md lg:max-w-none relative z-10"
-          initial={{ opacity: 0, scale: 0.9, rotate: -2 }}
-          animate={{ opacity: 1, scale: 1, rotate: 0 }}
-          transition={{ duration: 0.8, type: 'spring', bounce: 0.4 }}
-        >
-          <div className="relative rounded-[2.5rem] overflow-hidden shadow-2xl shadow-[#a8d5ba]/30 border-8 border-white/50 backdrop-blur-sm group">
-            <img 
-              src="/hero-image.jpg" 
-              alt="Talk Time App Interface" 
-              className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700 ease-in-out"
-            />
-            {/* Floating UI Elements Overlay */}
-            <motion.div 
-              className="absolute top-10 -left-6 bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-black/5 flex items-center gap-3"
-              animate={{ y: [0, -10, 0] }}
-              transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-            >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#f4d06f] to-[#ffb627] flex items-center justify-center">
-                <Ghost className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-zinc-800">Ephemeral</p>
-                <p className="text-xs text-zinc-500">Mode activated</p>
-              </div>
-            </motion.div>
-            
-            <motion.div 
-              className="absolute bottom-10 -right-6 bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-black/5 flex items-center gap-3"
-              animate={{ y: [0, 10, 0] }}
-              transition={{ repeat: Infinity, duration: 5, ease: "easeInOut", delay: 1 }}
-            >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#a8d5ba] to-[#88c5a6] flex items-center justify-center">
-                <MessageCircle className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-zinc-800">New Message</p>
-                <p className="text-xs text-zinc-500">Just now</p>
-              </div>
-            </motion.div>
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-24 px-4 sm:px-8 relative bg-zinc-50/50">
-        <div className="max-w-7xl mx-auto">
+        {/* Left Side: Content */}
+        <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 sm:px-16 lg:px-24 pt-12 pb-24 z-10 bg-white dark:bg-slate-950 transition-colors duration-300">
           <motion.div 
-            className="text-center mb-20 space-y-4"
             initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="max-w-xl"
           >
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-zinc-900 tracking-tight">
-              Crafted for Modern Teams
-            </h2>
-            <p className="text-lg sm:text-xl text-zinc-500 max-w-2xl mx-auto font-medium">
-              A meticulously designed fabric of features that adapts to how you naturally converse.
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] text-black dark:text-white mb-6">
+              Connect effortlessly. <br/>
+              <span className="text-[#9AC68A] dark:text-[#4ADE80] font-serif italic font-medium">Chat instantly.</span>
+            </h1>
+            
+            <p className="text-lg text-gray-500 dark:text-gray-400 mb-10 max-w-md leading-relaxed">
+              Simplify your workflow and boost your productivity with a clean, fast, and organized chat experience.
             </p>
-          </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-            {features.map((feature, index) => (
-              <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                whileHover={{ y: -5 }}
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <Link 
+                to={user ? "/chat" : "/register"}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-black dark:bg-[#4ADE80] text-white dark:text-black font-semibold px-8 h-14 rounded-full hover:bg-black/90 dark:hover:bg-[#22C55E] transition-colors text-[16px]"
               >
-                <Card className="h-full bg-white border-zinc-100 shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group">
-                  <CardHeader className="space-y-6 pt-8 px-8">
-                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center transform group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
-                      <feature.icon className="w-6 h-6 text-white" />
-                    </div>
-                    <CardTitle className="text-xl font-bold text-zinc-800">{feature.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-8 pb-8">
-                    <CardDescription className="text-zinc-500 text-base leading-relaxed font-medium">
-                      {feature.description}
-                    </CardDescription>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                {user ? "Open Application" : "Get Started"}
+                <ArrowRight className="w-5 h-5" />
+              </Link>
+            </div>
+            
+            <div className="mt-16 grid grid-cols-1 sm:grid-cols-2 gap-8">
+               <div>
+                  <div className="w-10 h-10 rounded-full bg-[#F2F6F0] dark:bg-slate-900 flex items-center justify-center mb-4 transition-colors duration-300">
+                    <MessageCircle className="w-5 h-5 text-[#9AC68A] dark:text-[#4ADE80]" />
+                  </div>
+                  <h3 className="font-bold text-black dark:text-white mb-2">Real-time Sync</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Messages delivered instantly across all your devices.</p>
+               </div>
+               <div>
+                  <div className="w-10 h-10 rounded-full bg-[#F2F6F0] dark:bg-slate-900 flex items-center justify-center mb-4 transition-colors duration-300">
+                    <Shield className="w-5 h-5 text-[#9AC68A] dark:text-[#4ADE80]" />
+                  </div>
+                  <h3 className="font-bold text-black dark:text-white mb-2">Private & Secure</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Your conversations stay between you and your friends.</p>
+               </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Right Side: Visuals */}
+        <div className="hidden lg:flex w-1/2 bg-[#F2F6F0] dark:bg-slate-900 relative overflow-hidden items-center justify-center transition-colors duration-300">
+          {/* Using the same doodle style for consistency */}
+          <motion.div 
+             initial={{ opacity: 0, scale: 0.95 }}
+             animate={{ opacity: 1, scale: 1 }}
+             transition={{ duration: 0.7, delay: 0.2 }}
+             className="w-full max-w-[600px] aspect-square flex items-center justify-center"
+          >
+             <img src="/auth-doodle.png" alt="Chat illustration" className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-screen dark:[filter:invert(70%)_sepia(100%)_saturate(400%)_hue-rotate(80deg)_brightness(120%)] dark:opacity-90" />
+          </motion.div>
+          
+          {/* Decorative bubble */}
+          <div className="absolute top-[30%] right-[15%] bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-xl rounded-br-none animate-bounce transition-colors duration-300" style={{ animationDuration: '3s' }}>
+             <p className="text-sm font-bold text-black dark:text-white">Hey! Ready to chat?</p>
+          </div>
+          <div className="absolute bottom-[35%] left-[15%] bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-xl rounded-bl-none animate-bounce transition-colors duration-300" style={{ animationDuration: '4s', animationDelay: '1s' }}>
+             <p className="text-sm font-bold text-[#9AC68A] dark:text-[#4ADE80]">Let's do this! ✨</p>
           </div>
         </div>
-      </section>
-
-      {/* Bottom CTA */}
-      <section className="py-24 px-4 sm:px-8 bg-white relative overflow-hidden">
-        {/* Decorative background circle */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-[#a8d5ba]/20 to-transparent rounded-full blur-[80px] pointer-events-none" />
-        
-        <div className="max-w-4xl mx-auto text-center relative z-10">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.7 }}
-          >
-            <Card className="bg-white/60 backdrop-blur-2xl border border-white shadow-2xl p-8 sm:p-12 rounded-[3rem]">
-              <CardContent className="space-y-8 flex flex-col items-center">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#a8d5ba] to-[#88c5a6] flex items-center justify-center shadow-lg mb-4">
-                  <Zap className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-3xl sm:text-5xl font-extrabold text-zinc-900 tracking-tight leading-tight">
-                  Ready to evolve your <br/> communication?
-                </h3>
-                <p className="text-lg sm:text-xl text-zinc-500 font-medium max-w-lg mx-auto">
-                  Join the next generation of conversational fabric with ChatBuzz.
-                </p>
-                <Button 
-                  asChild 
-                  size="lg"
-                  className="bg-[#88c5a6] hover:bg-[#73a58b] text-white border-0 px-10 py-7 text-xl rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 mt-4"
-                >
-                  <Link to="/chat">
-                    Enter Application
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-      </section>
-      
+      </main>
     </div>
   );
 };

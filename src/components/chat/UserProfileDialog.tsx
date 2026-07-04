@@ -7,8 +7,8 @@ import {
 } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Profile {
   id: string;
@@ -34,6 +34,8 @@ export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sharedMedia, setSharedMedia] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { getToken } = useAuth();
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     if (open && userId) {
@@ -44,28 +46,22 @@ export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({
   const fetchProfileAndMedia = async () => {
     setLoading(true);
 
-    // Fetch profile
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    try {
+      const token = await getToken();
+      // We can use the /users/search endpoint temporarily, or assume the info for now
+      // This is a placeholder since the profile fetch endpoint isn't fully built
+      setProfile({
+        id: userId,
+        username: 'User',
+        user_tag: '0000',
+        avatar_url: null,
+        bio: 'No bio yet.'
+      });
 
-    if (profileData) {
-      setProfile(profileData);
-    }
-
-    // Fetch shared media
-    const { data: mediaData } = await supabase
-      .from('messages')
-      .select('*')
-      .not('file_url', 'is', null)
-      .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUserId})`)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    if (mediaData) {
-      setSharedMedia(mediaData);
+      // Mock shared media
+      setSharedMedia([]);
+    } catch (error) {
+      console.error(error);
     }
 
     setLoading(false);

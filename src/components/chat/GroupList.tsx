@@ -3,7 +3,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Users, Trash2, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -45,72 +44,30 @@ export const GroupList: React.FC<GroupListProps> = ({
 
   const fetchGroups = async () => {
     if (!user) return;
-
-    const { data, error } = await supabase
-      .from('group_members')
-      .select(`
-        group:groups(id, name, avatar_url, created_by)
-      `)
-      .eq('user_id', user.id);
-
-    if (error) {
-      console.error('Error fetching groups:', error);
-    } else {
-      const groupsList = data
-        ?.map((item: any) => item.group)
-        .filter(Boolean) as Group[];
-      setGroups(groupsList || []);
-    }
+    
+    // TODO: Fetch groups from new backend API
+    setGroups([]);
     setLoading(false);
   };
 
   useEffect(() => {
     fetchGroups();
-
-    const channel = supabase
-      .channel('groups-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'groups' },
-        () => fetchGroups()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'group_members' },
-        () => fetchGroups()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [user, refreshTrigger]);
 
   const handleDeleteGroup = async () => {
     if (!deleteGroupId) return;
     setDeleting(true);
 
-    const { error } = await supabase
-      .from('groups')
-      .delete()
-      .eq('id', deleteGroupId);
-
-    if (error) {
+    try {
+      // TODO: Connect delete group API
+      toast({
+        title: 'Notice',
+        description: 'Delete group API not yet connected',
+      });
+    } catch (error) {
       console.error('Error deleting group:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete group. You may not have permission.',
-        variant: 'destructive'
-      });
-    } else {
-      toast({
-        title: 'Group deleted',
-        description: 'The group has been deleted'
-      });
-      if (selectedGroupId === deleteGroupId) {
-        onGroupSelect('');
-      }
     }
+    
     setDeleting(false);
     setDeleteGroupId(null);
   };

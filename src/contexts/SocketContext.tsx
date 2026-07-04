@@ -1,7 +1,9 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { io, Socket } from 'socket.io-client';
+import { useAuth } from './AuthContext';
 
 interface SocketContextType {
-  socket: null;
+  socket: Socket | null;
   isConnected: boolean;
   onlineUsers: Set<string>;
 }
@@ -20,10 +22,48 @@ export const useSocket = () => {
   return context;
 };
 
-// Placeholder - will be replaced with Supabase Realtime
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  
+  const { user, getToken } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+
+    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
+      withCredentials: true,
+      transports: ['websocket', 'polling']
+    });
+
+    setSocket(newSocket);
+
+    newSocket.on('connect', () => {
+      setIsConnected(true);
+      newSocket.emit('user_online', user.id);
+    });
+
+    newSocket.on('disconnect', () => {
+      setIsConnected(false);
+    });
+
+    newSocket.on('user_status_change', ({ userId, status }) => {
+      setOnlineUsers(prev => {
+        const next = new Set(prev);
+        if (status === 'online') next.add(userId);
+        else next.delete(userId);
+        return next;
+      });
+    });
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [user]);
+
   return (
-    <SocketContext.Provider value={{ socket: null, isConnected: true, onlineUsers: new Set() }}>
+    <SocketContext.Provider value={{ socket, isConnected, onlineUsers }}>
       {children}
     </SocketContext.Provider>
   );

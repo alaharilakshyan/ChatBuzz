@@ -22,7 +22,6 @@ import { OneTimeViewImage } from './OneTimeViewImage';
 import { InstagramMediaCard } from './InstagramMediaCard';
 import { VoiceWaveform } from './VoiceWaveform';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { decryptMessage, isEncrypted } from '@/utils/encryption';
 import gsap from 'gsap';
 
@@ -170,17 +169,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     if (message.expires_at) {
       startCountdown(message.expires_at);
     } else if (!isSent && !message.expires_at) {
-      // Recipient reads it on mount: set expires_at to NOW + 10s
+      // Mock update expires_at
       const expiry = new Date(Date.now() + 10 * 1000).toISOString();
-      supabase
-        .from('messages')
-        .update({ expires_at: expiry })
-        .eq('id', message.id)
-        .then(({ error }) => {
-          if (!error) {
-            startCountdown(expiry);
-          }
-        });
+      startCountdown(expiry);
     }
 
     return () => {
@@ -189,26 +180,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   }, [message.is_ephemeral, message.expires_at, isSent]);
 
   const handleDeleteFromDbSilent = async () => {
-    try {
-      await supabase.from('messages').delete().eq('id', message.id);
-    } catch (e) {
-      console.error("Silent delete failed:", e);
-    }
+    // Mock silent delete
   };
 
   const handleDelete = async () => {
     try {
-      const { error } = await supabase
-        .from('messages')
-        .update({ is_deleted: true })
-        .eq('id', message.id);
-
-      if (error) throw error;
-
-      if (url) {
-        const filePath = url.split('/').slice(-2).join('/');
-        await supabase.storage.from('chat-files').remove([filePath]);
-      }
+      // Mock delete API call
+      await new Promise(r => setTimeout(r, 500));
 
       onDelete?.(message.id);
       toast({
@@ -226,7 +204,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     setShowDeleteDialog(false);
   };
 
-  // Double tap handler
   const handleDoubleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     setShowHeartPop(true);
@@ -234,28 +211,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     // Heart animation
     setTimeout(() => setShowHeartPop(false), 800);
 
-    try {
-      // Fetch user heart reactions
-      const { data: existing } = await supabase
-        .from('reactions')
-        .select('*')
-        .eq('message_id', message.id)
-        .eq('user_id', currentUserId)
-        .eq('emoji', '❤️')
-        .maybeSingle();
-
-      if (existing) {
-        await supabase.from('reactions').delete().eq('id', existing.id);
-      } else {
-        await supabase.from('reactions').insert({
-          message_id: message.id,
-          user_id: currentUserId,
-          emoji: '❤️',
-        });
-      }
-    } catch (err) {
-      console.error("Error toggling double click reaction:", err);
-    }
+    // Mock reaction API call
+    console.log("Heart reaction triggered");
   };
 
   const toggleAudioPlayback = () => {
@@ -313,10 +270,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         )}
 
         <div 
-          className={`relative rounded-2xl px-4 py-2.5 shadow-[0_2px_8px_rgba(12,20,18,0.02)] transition-all duration-200 select-none cursor-pointer ${
+          className={`relative rounded-3xl px-5 py-3 shadow-[0_4px_16px_rgba(0,0,0,0.05)] transition-all duration-200 select-none cursor-pointer border ${
             isSent 
-              ? 'bg-[#0C1412] text-white rounded-br-sm' 
-              : 'bg-white border border-[#1A2421]/10 rounded-bl-sm text-[#1A2421]'
+              ? 'bg-[#9AC68A] dark:bg-[#4ADE80] text-white dark:text-slate-950 rounded-br-sm border-transparent' 
+              : 'bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-white/60 dark:border-slate-700/50 rounded-bl-sm text-gray-900 dark:text-white'
           }`}
           onDoubleClick={handleDoubleClick}
         >
@@ -480,8 +437,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
           
           {/* Timestamp */}
-          <span className={`text-[9px] font-bold mt-1.5 block ${
-            isSent ? 'opacity-60 text-right' : 'text-[#1A2421]/50'
+          <span className={`text-[10px] font-medium mt-1.5 block ${
+            isSent ? 'opacity-80 text-right text-white/90 dark:text-slate-950/80' : 'text-gray-500 dark:text-gray-400'
           }`}>
             {new Date(message.created_at).toLocaleTimeString('en-US', {
               hour: '2-digit',

@@ -85,15 +85,24 @@ const Index = () => {
         </div>
 
         {/* Right Side: Visuals */}
-        <div className="hidden lg:flex w-1/2 bg-[#F2F6F0] dark:bg-slate-900 relative overflow-hidden items-center justify-center transition-colors duration-300">
-          {/* Using the same doodle style for consistency */}
+        <div className="hidden lg:flex w-1/2 bg-[#F8FAFC] dark:bg-slate-900/50 relative overflow-hidden items-center justify-center transition-colors duration-300">
           <motion.div 
-             initial={{ opacity: 0, scale: 0.95 }}
-             animate={{ opacity: 1, scale: 1 }}
-             transition={{ duration: 0.7, delay: 0.2 }}
-             className="w-full max-w-[600px] aspect-square flex items-center justify-center"
+             initial={{ opacity: 0, y: 20 }}
+             animate={{ 
+               opacity: 1, 
+               y: [0, -12, 0]
+             }}
+             transition={{ 
+               opacity: { duration: 0.7, delay: 0.2 },
+               y: {
+                 repeat: Infinity,
+                 duration: 6,
+                 ease: "easeInOut"
+               }
+             }}
+             className="w-full max-w-[550px] aspect-square flex items-center justify-center z-10"
           >
-             <img src="/hero-image.jpg" alt="Chat illustration" className="w-full max-h-[85%] object-cover rounded-[32px] shadow-2xl border border-white/40 dark:border-slate-800/40" />
+             <img src="/chatbuzz-hook.png" alt="ChatBuzz interface preview" className="w-full max-h-[85%] object-cover rounded-[32px] shadow-2xl border border-slate-200/50 dark:border-slate-800/50" />
           </motion.div>
           
           {/* Decorative bubble */}

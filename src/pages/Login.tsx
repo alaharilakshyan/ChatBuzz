@@ -37,15 +37,15 @@ const Login = () => {
         </div>
 
         {/* Illustration Side */}
-        <div className="hidden lg:flex w-1/2 bg-[#F2F6F0] dark:bg-slate-900 p-12 items-center justify-center relative transition-colors duration-300">
-          <div className="text-center absolute bottom-24 z-10">
-            <h2 className="text-2xl font-bold text-black dark:text-white max-w-sm mx-auto">
+        <div className="hidden lg:flex w-1/2 bg-[#F8FAFC] dark:bg-slate-950 p-12 items-center justify-center relative transition-colors duration-300">
+          <div className="text-center absolute bottom-12 z-10">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 max-w-sm mx-auto drop-shadow-sm">
               The easiest way to chat, chill, and catch up with friends
             </h2>
           </div>
-          {/* Doodle Illustration */}
-          <div className="w-full max-w-lg aspect-square flex items-center justify-center -mt-20">
-             <img src="/auth-doodle.png" alt="Working doodle" className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-screen dark:[filter:invert(70%)_sepia(100%)_saturate(400%)_hue-rotate(80deg)_brightness(120%)] dark:opacity-90" />
+          {/* 3D Illustration */}
+          <div className="w-full max-w-lg aspect-square flex items-center justify-center -mt-20 overflow-hidden rounded-[2rem] shadow-2xl border border-slate-200/50 dark:border-slate-800/50">
+             <img src="/login-illustration.jpg" alt="ChatBuzz connect illustration" className="w-full h-full object-cover" />
           </div>
         </div>
       </div>

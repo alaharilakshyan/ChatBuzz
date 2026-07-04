@@ -155,7 +155,7 @@ export const ChatInterface = () => {
           ...msg,
           id: msg._id,
           created_at: msg.createdAt,
-          sender_id: senderId,
+          sender_id: msg.senderId?._id || msg.senderId?.clerkId,
           is_one_time_view: msg.isOneTimeView,
           viewed_by: msg.viewedBy,
           sender: mappedSender

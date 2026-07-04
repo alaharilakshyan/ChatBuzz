@@ -90,7 +90,7 @@ const Index = () => {
              initial={{ opacity: 0, y: 20 }}
              animate={{ 
                opacity: 1, 
-               y: [0, -12, 0]
+               y: [0, -10, 0]
              }}
              transition={{ 
                opacity: { duration: 0.7, delay: 0.2 },
@@ -100,18 +100,10 @@ const Index = () => {
                  ease: "easeInOut"
                }
              }}
-             className="w-full max-w-[550px] aspect-square flex items-center justify-center z-10"
+             className="w-full max-w-[600px] px-6 flex items-center justify-center z-10"
           >
-             <img src="/chatbuzz-hook.png" alt="ChatBuzz interface preview" className="w-full max-h-[85%] object-cover rounded-[32px] shadow-2xl border border-slate-200/50 dark:border-slate-800/50" />
+             <img src="/chatbuzz-hook.png" alt="ChatBuzz connect banner" className="w-full h-auto object-contain rounded-3xl shadow-2xl border border-slate-200/50 dark:border-slate-800/50" />
           </motion.div>
-          
-          {/* Decorative bubble */}
-          <div className="absolute top-[30%] right-[15%] bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-xl rounded-br-none animate-bounce transition-colors duration-300" style={{ animationDuration: '3s' }}>
-             <p className="text-sm font-bold text-black dark:text-white">Hey! Ready to chat?</p>
-          </div>
-          <div className="absolute bottom-[35%] left-[15%] bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-xl rounded-bl-none animate-bounce transition-colors duration-300" style={{ animationDuration: '4s', animationDelay: '1s' }}>
-             <p className="text-sm font-bold text-[#9AC68A] dark:text-[#4ADE80]">Let's do this! ✨</p>
-          </div>
         </div>
       </main>
     </div>

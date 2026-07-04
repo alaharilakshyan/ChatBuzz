@@ -9,6 +9,7 @@ import { Loader2, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const ForgotPassword = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);

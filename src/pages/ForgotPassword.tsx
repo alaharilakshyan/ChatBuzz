@@ -1,7 +1,7 @@
 import React from 'react';
 import { ForgotPassword as ForgotPasswordForm } from '@/components/auth/ForgotPassword';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { MessageCircle, Sparkles } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const ForgotPassword = () => {

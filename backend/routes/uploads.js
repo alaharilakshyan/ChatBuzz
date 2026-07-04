@@ -4,43 +4,81 @@ import multer from 'multer';
 import mongoose from 'mongoose';
 import crypto from 'crypto';
 import path from 'path';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
 const router = express.Router();
+const useCloudinary = Boolean(
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET
+);
 
-const storage = new GridFsStorage({
-  url: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/talk-time',
-  options: { useNewUrlParser: true, useUnifiedTopology: true },
-  file: (req, file) => {
-    return new Promise((resolve, reject) => {
-      crypto.randomBytes(16, (err, buf) => {
-        if (err) {
-          return reject(err);
-        }
-        const filename = buf.toString('hex') + path.extname(file.originalname);
-        const fileInfo = {
-          filename: filename,
-          bucketName: 'uploads'
-        };
-        resolve(fileInfo);
+let upload;
+let storageMode = 'gridfs';
+
+if (useCloudinary) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+    secure: true,
+  });
+
+  const cloudinaryStorage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+      folder: 'talk-time-app',
+      resource_type: 'auto',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'webm', 'mp3', 'wav', 'ogg', 'pdf', 'txt'],
+      public_id: (req, file) => {
+        const name = file.originalname.replace(/\.[^/.]+$/, '');
+        return `talk-time-app/${Date.now()}-${name}`;
+      },
+    },
+  });
+
+  upload = multer({ storage: cloudinaryStorage });
+  storageMode = 'cloudinary';
+} else {
+  const gridFsStorage = new GridFsStorage({
+    url: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/talk-time',
+    options: { useNewUrlParser: true, useUnifiedTopology: true },
+    file: (req, file) => {
+      return new Promise((resolve, reject) => {
+        crypto.randomBytes(16, (err, buf) => {
+          if (err) {
+            return reject(err);
+          }
+          const filename = buf.toString('hex') + path.extname(file.originalname);
+          const fileInfo = {
+            filename,
+            bucketName: 'uploads'
+          };
+          resolve(fileInfo);
+        });
       });
-    });
-  }
-});
+    }
+  });
 
-const upload = multer({ storage });
+  upload = multer({ storage: gridFsStorage });
+}
 
 router.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  
-  const fileUrl = `${req.protocol}://${req.get('host')}/api/uploads/files/${req.file.filename}`;
-  
+
+  const fileUrl = useCloudinary
+    ? (req.file.secure_url || req.file.path || req.file.url)
+    : `${req.protocol}://${req.get('host')}/api/uploads/files/${req.file.filename}`;
+
   res.json({
     url: fileUrl,
-    name: req.file.originalname,
-    size: req.file.size,
-    mime_type: req.file.mimetype
+    name: req.file.originalname || req.file.filename || 'file',
+    size: req.file.size || req.file.bytes || null,
+    mime_type: req.file.mimetype || req.file.contentType || null,
+    storageMode,
   });
 });
 

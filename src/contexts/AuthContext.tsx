@@ -18,6 +18,7 @@ interface AuthUser {
   avatar_url: string | null;
   avatar: string | null;
   bio: string | null;
+  publicKey?: string | null;
 }
 
 interface AuthContextType {

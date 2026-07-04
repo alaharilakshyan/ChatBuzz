@@ -62,10 +62,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
         {messages.map((message) => (
           <MessageBubble
             key={message.id}
-            message={{
-              ...message,
-              isSent: message.sender_id === currentUserId
-            }}
+            message={message}
             isSent={message.sender_id === currentUserId}
             currentUserId={currentUserId}
             otherUserId={otherUserId}

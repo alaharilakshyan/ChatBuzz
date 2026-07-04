@@ -5,6 +5,8 @@ export const RegisterForm = () => {
   return (
     <div className="w-full flex justify-center bg-transparent">
       <SignUp 
+        routing="path"
+        path="/register"
         signInUrl="/login"
         fallbackRedirectUrl="/chat"
         appearance={{
@@ -21,6 +23,7 @@ export const RegisterForm = () => {
             dividerText: "text-gray-500 dark:text-gray-400",
             socialButtonsBlockButton: "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 text-black dark:text-white rounded-xl h-11",
             socialButtonsBlockButtonText: "font-semibold",
+            branding: "hidden",
           }
         }}
       />

@@ -332,3 +332,8 @@
   animation: waveSweep 1.5s ease-in-out;
 }
 
+/* Hide Clerk branding logo/text */
+.cl-branding {
+  display: none !important;
+}
+

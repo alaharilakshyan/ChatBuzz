@@ -111,46 +111,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                  body: JSON.stringify({ publicKey: pubKey })
                });
             } else {
-              // Fallback to clerkUser details if backend is down to prevent infinite redirect loop
-              const p: Profile = {
-                id: clerkUser.id,
-                username: clerkUser.username || clerkUser.firstName || "User",
-                user_tag: "0000",
-                avatar_url: clerkUser.imageUrl,
-                bio: ""
-              };
-              setProfile(p);
-              // If backend returned non-OK, fall back to Clerk user data so
-              // the client treats the session as authenticated and avoids
-              // redirect loops while the backend recovers or webhooks arrive.
-              const p: Profile = {
+              // Backend /users/me returned non-OK: fall back to Clerk user
+              // information so the client treats the session as authenticated
+              // and avoids redirect loops while the backend recovers.
+              const fallbackProfile: Profile = {
                 id: clerkUser.id,
                 username: clerkUser.username || clerkUser.firstName || 'User',
                 user_tag: '0000',
                 avatar_url: clerkUser.imageUrl,
                 bio: ''
               };
-              setProfile(p);
+              setProfile(fallbackProfile);
               setUser({
                 id: clerkUser.id,
                 email: clerkUser.primaryEmailAddress?.emailAddress || '',
-                username: p.username,
-                user_tag: p.user_tag,
-                avatar_url: p.avatar_url,
-                avatar: p.avatar_url,
-                bio: p.bio,
+                username: fallbackProfile.username,
+                user_tag: fallbackProfile.user_tag,
+                avatar_url: fallbackProfile.avatar_url,
+                avatar: fallbackProfile.avatar_url,
+                bio: fallbackProfile.bio,
                 publicKey: null
               });
               console.warn('/users/me returned non-OK; using Clerk fallback profile');
-              setUser({
-                id: clerkUser.id,
-                email: clerkUser.primaryEmailAddress?.emailAddress || '',
-                username: p.username,
-                user_tag: p.user_tag,
-                avatar_url: p.avatar_url,
-                avatar: p.avatar_url,
-                bio: p.bio
-              });
             }
           }
         } catch (err) {

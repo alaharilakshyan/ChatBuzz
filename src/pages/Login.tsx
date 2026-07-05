@@ -9,9 +9,10 @@ import { motion } from 'framer-motion';
 
 const Login = () => {
   const { user } = useAuth();
-  const { isLoaded: clerkLoaded } = useUser();
-  // Only redirect to /chat if Clerk has finished loading and we have a user
-  if (clerkLoaded && user) return <Navigate to="/chat" replace />;
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  // Redirect to /chat only after Clerk has initialized and there's either
+  // a backend user or a Clerk session (prevents bouncing while profile loads).
+  if (clerkLoaded && (user || clerkUser)) return <Navigate to="/chat" replace />;
 
   return (
     <div className="min-h-screen flex w-full relative overflow-hidden bg-white dark:bg-slate-950 transition-colors duration-300">

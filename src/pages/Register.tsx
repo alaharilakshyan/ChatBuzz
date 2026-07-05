@@ -9,9 +9,10 @@ import { motion } from 'framer-motion';
 
 const Register = () => {
   const { user } = useAuth();
-  const { isLoaded: clerkLoaded } = useUser();
-  // Avoid redirect until Clerk has finished initializing
-  if (clerkLoaded && user) return <Navigate to="/chat" replace />;
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  // Avoid redirect until Clerk has finished initializing; allow redirect if
+  // Clerk shows a signed-in user even if backend profile is still pending.
+  if (clerkLoaded && (user || clerkUser)) return <Navigate to="/chat" replace />;
 
   return (
     <div className="min-h-screen flex w-full relative overflow-hidden bg-white dark:bg-slate-950 transition-colors duration-300">

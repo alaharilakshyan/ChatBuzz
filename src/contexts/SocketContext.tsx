@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { useUser } from '@clerk/clerk-react';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -28,9 +29,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   
   const { user, getToken } = useAuth();
+  const { user: clerkUser } = useUser();
 
   useEffect(() => {
-    if (!user) return;
+    // Allow socket to initialize when Clerk session exists even if our
+    // backend `user` object hasn't been fully populated yet.
+    const effectiveUser = user || (clerkUser ? { id: clerkUser.id } : null);
+    if (!effectiveUser) return;
 
     const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
       withCredentials: true,
@@ -41,7 +46,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     newSocket.on('connect', () => {
       setIsConnected(true);
-      newSocket.emit('user_online', user.id);
+      newSocket.emit('user_online', effectiveUser.id);
     });
 
     newSocket.on('disconnect', () => {

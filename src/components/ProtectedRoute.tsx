@@ -12,16 +12,16 @@ interface ProtectedRouteProps {
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
-  const { isLoaded: clerkLoaded } = useUser();
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
 
-  // Wait for Clerk SDK to initialize and for our profile loading
-  // to finish before making redirect decisions. This avoids
-  // redirect loops / bouncing during sign-in flows on slow networks.
-  if (!clerkLoaded || loading) {
-    return <LoadingSpinner />;
-  }
+  // Wait for Clerk SDK to initialize before making redirect decisions.
+  if (!clerkLoaded) return <LoadingSpinner />;
 
-  if (!user) {
+  // If we have either a local `user` (from our backend) or a Clerk user
+  // session, allow access. This prevents a redirect race where Clerk
+  // redirects to /chat immediately after sign-in but our backend
+  // profile hasn't been fetched yet.
+  if (!user && !clerkUser) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

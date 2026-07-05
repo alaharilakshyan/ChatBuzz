@@ -120,6 +120,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 bio: ""
               };
               setProfile(p);
+              // If backend returned non-OK, fall back to Clerk user data so
+              // the client treats the session as authenticated and avoids
+              // redirect loops while the backend recovers or webhooks arrive.
+              const p: Profile = {
+                id: clerkUser.id,
+                username: clerkUser.username || clerkUser.firstName || 'User',
+                user_tag: '0000',
+                avatar_url: clerkUser.imageUrl,
+                bio: ''
+              };
+              setProfile(p);
+              setUser({
+                id: clerkUser.id,
+                email: clerkUser.primaryEmailAddress?.emailAddress || '',
+                username: p.username,
+                user_tag: p.user_tag,
+                avatar_url: p.avatar_url,
+                avatar: p.avatar_url,
+                bio: p.bio,
+                publicKey: null
+              });
+              console.warn('/users/me returned non-OK; using Clerk fallback profile');
               setUser({
                 id: clerkUser.id,
                 email: clerkUser.primaryEmailAddress?.emailAddress || '',

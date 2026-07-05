@@ -14,6 +14,8 @@ import { UserProfileDialog } from './UserProfileDialog';
 import { CallDialog } from './CallDialog';
 import { CreateGroupDialog } from './CreateGroupDialog';
 import { UserSearch } from '../friends/UserSearch';
+import { GlobalSearchDialog } from './GlobalSearchDialog';
+import { MediaGalleryDialog } from './MediaGalleryDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,6 +58,17 @@ interface Profile {
   avatar_url: string | null;
   bio: string | null;
   isOnline?: boolean;
+  lastMessage?: {
+    _id: string;
+    content: string;
+    senderId: string;
+    sender: {
+      username: string;
+      avatar_url: string | null;
+    };
+    createdAt: string;
+  } | null;
+  unreadCount?: number;
 }
 
 export const ChatInterface = () => {
@@ -87,6 +100,7 @@ export const ChatInterface = () => {
   const [isEphemeral, setIsEphemeral] = useState(false);
   const [isOneTimeView, setIsOneTimeView] = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<any>(null);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarSearch, setSidebarSearch] = useState('');
@@ -95,6 +109,8 @@ export const ChatInterface = () => {
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [callUser, setCallUser] = useState<Profile | null>(null);
   const [isVideoCall, setIsVideoCall] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [mediaGalleryOpen, setMediaGalleryOpen] = useState(false);
 
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -190,7 +206,6 @@ export const ChatInterface = () => {
 
       setMessages(prev => {
         if (prev.some(m => m._id === msg._id)) return prev;
-
         return [...prev, normalizeMessage(msg)];
       });
     };
@@ -201,12 +216,39 @@ export const ChatInterface = () => {
       ));
     };
 
+    const handleMessageDeleted = ({ messageId }: { messageId: string }) => {
+      setMessages(prev => prev.map(m =>
+        m._id === messageId ? { ...m, isDeleted: true, content: '' } : m
+      ));
+    };
+
+    const handleMessageExpired = ({ messageId }: { messageId: string }) => {
+      setMessages(prev => prev.filter(m => m._id !== messageId));
+    };
+
+    const handleIncomingCall = ({ offer, from, isVideo }: { offer: any, from: string, isVideo: boolean }) => {
+      console.log('Received incoming call from:', from);
+      const callingFriend = allProfiles.find(p => p.id === from);
+      if (callingFriend) {
+        setIsVideoCall(isVideo);
+        setCallUser(callingFriend);
+        // We'll pass incoming offer down to CallDialog
+        (window as any).incomingCallOffer = offer;
+      }
+    };
+
     socket.on('new_message', handleNewMessage);
     socket.on('message_viewed', handleMessageViewed);
+    socket.on('message_deleted', handleMessageDeleted);
+    socket.on('message_expired', handleMessageExpired);
+    socket.on('incoming_call', handleIncomingCall);
 
     return () => {
       socket.off('new_message', handleNewMessage);
       socket.off('message_viewed', handleMessageViewed);
+      socket.off('message_deleted', handleMessageDeleted);
+      socket.off('message_expired', handleMessageExpired);
+      socket.off('incoming_call', handleIncomingCall);
     };
   }, [activeChannelId, user, activeWorkspaceId, socket]);
 
@@ -233,15 +275,22 @@ export const ChatInterface = () => {
   const fetchAllProfiles = async () => {
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/users/search`, {
+      // Fetch conversations with last message and unread count
+      const res = await fetch(`${API_URL}/chat/conversations/list`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
-        setAllProfiles(data.map((p: any) => ({ ...p, id: p.clerkId })));
+        // Map conversations to profiles with last message info
+        setAllProfiles(data.map((c: any) => ({
+          ...c.friend,
+          id: c.friend._id,
+          lastMessage: c.lastMessage,
+          unreadCount: c.unreadCount
+        })));
       }
     } catch (err) {
-      console.error('Failed to fetch profiles', err);
+      console.error('Failed to fetch conversations', err);
     }
   };
 
@@ -275,6 +324,36 @@ export const ChatInterface = () => {
   const handleSelectFriend = async (friendId: string) => {
     setSelectedFriendId(friendId);
     setActiveChannelId(friendId);
+    
+    // Mark messages as read when opening conversation
+    try {
+      const token = await getToken();
+      // Get messages to mark as read
+      const res = await fetch(`${API_URL}/chat/${friendId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const messages = await res.json();
+        // Mark all unread messages from the other user as read
+        const unreadMessages = messages.filter((m: any) => 
+          m.senderId !== user?.id && !m.readBy?.includes(user?.id)
+        );
+        
+        await Promise.all(
+          unreadMessages.map((m: any) =>
+            fetch(`${API_URL}/chat/${m._id}/read`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` }
+            })
+          )
+        );
+        
+        // Refresh conversations to update unread counts
+        fetchAllProfiles();
+      }
+    } catch (err) {
+      console.error('Error marking messages as read:', err);
+    }
   };
 
   const handleMessageChange = (value: string) => {
@@ -333,7 +412,7 @@ export const ChatInterface = () => {
       }
     }
 
-    const encryptedContent = await encryptMessage(messageContent, user.id, activeChannelId);
+    const encryptedContent = await encryptMessage(messageContent, user.id, activeWorkspaceId ? null : activeChannelId);
 
     const payload = {
       senderId: user.id,
@@ -343,7 +422,8 @@ export const ChatInterface = () => {
       attachments: attachmentsPayload,
       metadata: { has_card: false },
       isEphemeral,
-      isOneTimeView
+      isOneTimeView,
+      replyTo: replyingTo?._id || null
     };
 
     socket.emit('send_message', payload);
@@ -352,6 +432,7 @@ export const ChatInterface = () => {
     setSelectedFile(null);
     setIsEphemeral(false);
     setIsOneTimeView(false);
+    setReplyingTo(null);
     setIsSending(false);
     setUploading(false);
   };
@@ -359,6 +440,22 @@ export const ChatInterface = () => {
   const handleVoiceRecording = (file: File) => {
     setSelectedFile(file);
     setTimeout(() => handleSendMessage(), 100);
+  };
+
+  const handleReply = async (message: any) => {
+    try {
+      const token = await getToken();
+      const messageId = message._id || message.id;
+      const res = await fetch(`${API_URL}/chat/${messageId}/reply`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReplyingTo(data);
+      }
+    } catch (err) {
+      console.error('Error fetching reply context:', err);
+    }
   };
 
   if (!user) return null;
@@ -424,6 +521,10 @@ export const ChatInterface = () => {
               <div className="space-y-0.5">
                 {filteredFriends.map((friend) => {
                   const isSelected = selectedFriendId === friend.id;
+                  const lastMessagePreview = friend.lastMessage?.content || 'No messages yet';
+                  const isLastMessageFromMe = friend.lastMessage?.senderId === user?.id;
+                  const unreadCount = friend.unreadCount || 0;
+                  
                   return (
                     <button
                       key={friend.id}
@@ -446,9 +547,16 @@ export const ChatInterface = () => {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold truncate ${isSelected ? 'text-[#9AC68A] dark:text-[#4ADE80]' : 'text-gray-900 dark:text-white'}`}>{friend.username}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                          {friend.isOnline ? "Online" : "Offline"}
+                        <div className="flex items-center justify-between">
+                          <p className={`text-sm font-bold truncate ${isSelected ? 'text-[#9AC68A] dark:text-[#4ADE80]' : 'text-gray-900 dark:text-white'}`}>{friend.username}</p>
+                          {unreadCount > 0 && (
+                            <span className="flex-shrink-0 ml-2 px-2 py-0.5 bg-[#9AC68A] dark:bg-[#4ADE80] text-white dark:text-slate-950 text-xs font-bold rounded-full">
+                              {unreadCount}
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-xs truncate mt-0.5 ${isSelected ? 'text-gray-600 dark:text-gray-400' : 'text-gray-500 dark:text-gray-500'}`}>
+                          {isLastMessageFromMe ? 'You: ' : ''}{lastMessagePreview}
                         </p>
                       </div>
                     </button>
@@ -473,6 +581,8 @@ export const ChatInterface = () => {
                 onSearchChange={setSearchQuery}
                 onVoiceCall={() => setCallUser(selectedFriend || null)}
                 onVideoCall={() => { setCallUser(selectedFriend || null); setIsVideoCall(true); }}
+                onGlobalSearch={() => setGlobalSearchOpen(true)}
+                onMediaClick={() => setMediaGalleryOpen(true)}
                 onBack={() => { setActiveChannelId(null); setSelectedFriendId(null); }}
               />
               <ChatMessages
@@ -481,6 +591,7 @@ export const ChatInterface = () => {
                 otherUserId={activeChannelId}
                 isLoading={isLoading}
                 onDelete={(id) => setMessages(prev => prev.filter(m => m._id !== id))}
+                onReply={handleReply}
               />
               {isTyping && (
                 <div className="px-6 py-2 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md border-t border-white/40 dark:border-slate-700/50">
@@ -541,6 +652,20 @@ export const ChatInterface = () => {
         />
       )}
       <CallDialog open={!!callUser} onOpenChange={(open) => !open && setCallUser(null)} user={callUser as any} isVideo={isVideoCall} />
+      <GlobalSearchDialog
+        open={globalSearchOpen}
+        onOpenChange={setGlobalSearchOpen}
+        onSelectMessage={(targetUserId, messageId) => {
+          handleSelectFriend(targetUserId);
+        }}
+      />
+      {selectedFriendId && (
+        <MediaGalleryDialog
+          open={mediaGalleryOpen}
+          onOpenChange={setMediaGalleryOpen}
+          targetUserId={selectedFriendId}
+        />
+      )}
       <Dialog open={showAddContact} onOpenChange={setShowAddContact}>
         <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/60 dark:border-slate-800/50 shadow-2xl rounded-[28px] gap-0">
           <div className="h-16 w-full bg-gradient-to-r from-[#9AC68A] to-[#8AB67A] dark:from-[#4ADE80] dark:to-[#22C55E] mx-6 mt-6 rounded-[16px] max-w-[calc(100%-48px)]" />

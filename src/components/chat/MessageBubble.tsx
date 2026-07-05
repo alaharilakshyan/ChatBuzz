@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, Download, ExternalLink, Trash2, Volume2, Pause, Play, Eye, Forward, MoreVertical, Flame, Heart } from 'lucide-react';
+import { FileText, Download, ExternalLink, Trash2, Volume2, Pause, Play, Eye, Forward, MoreVertical, Flame, Heart, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -55,7 +55,10 @@ interface MessageBubbleProps {
   otherUserId: string; // Used for Direct Message keys
   onDelete?: (messageId: string) => void;
   onForward?: (message: Message) => void;
+  onReply?: (message: Message) => void;
 }
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
@@ -63,7 +66,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   currentUserId,
   otherUserId,
   onDelete,
-  onForward
+  onForward,
+  onReply
 }) => {
   const { toast } = useToast();
   const bubbleRef = useRef<HTMLDivElement>(null);
@@ -93,16 +97,35 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   // Double tap animation states
   const [showHeartPop, setShowHeartPop] = useState(false);
 
+  const [linkPreview, setLinkPreview] = useState<{ title: string; description: string; image: string; url: string } | null>(null);
+
   // Decrypt content
   useEffect(() => {
     const decrypt = async () => {
       setIsDecrypting(true);
       try {
+        let contentText = '';
         if (message.content && isEncrypted(message.content)) {
-          const decrypted = await decryptMessage(message.content, currentUserId, otherUserId);
-          setDecryptedContent(decrypted);
+          contentText = await decryptMessage(message.content, currentUserId, otherUserId);
+          setDecryptedContent(contentText);
         } else {
-          setDecryptedContent(message.content || '');
+          contentText = message.content || '';
+          setDecryptedContent(contentText);
+        }
+
+        // Search for URL links
+        const urlRegex = /(https?:\/\/[^\s]+)/gi;
+        const matches = contentText.match(urlRegex);
+        if (matches && matches.length > 0) {
+          const targetUrl = matches[0];
+          fetch(`${API_URL}/chat/link-preview/scraper?url=${encodeURIComponent(targetUrl)}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data && (data.title || data.description)) {
+                setLinkPreview({ ...data, url: targetUrl });
+              }
+            })
+            .catch(e => console.error(e));
         }
       } catch (error) {
         console.error('Decryption failed:', error);
@@ -180,13 +203,36 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   }, [message.is_ephemeral, message.expires_at, isSent]);
 
   const handleDeleteFromDbSilent = async () => {
-    // Mock silent delete
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      
+      // Call real DELETE endpoint for ephemeral messages
+      await fetch(`${API_URL}/chat/${message.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (error) {
+      console.error('Error deleting ephemeral message:', error);
+    }
   };
 
   const handleDelete = async () => {
     try {
-      // Mock delete API call
-      await new Promise(r => setTimeout(r, 500));
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      
+      // Call real DELETE endpoint
+      const response = await fetch(`${API_URL}/chat/${message.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete message');
+      }
 
       onDelete?.(message.id);
       toast({
@@ -296,6 +342,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align={isSent ? 'end' : 'start'} className="w-40 rounded-xl">
+              {onReply && (
+                <DropdownMenuItem onClick={() => onReply(message)} className="rounded-lg">
+                  <Reply className="h-4 w-4 mr-2" />
+                  Reply
+                </DropdownMenuItem>
+              )}
               {onForward && (
                 <DropdownMenuItem onClick={() => onForward(message)} className="rounded-lg">
                   <Forward className="h-4 w-4 mr-2" />
@@ -431,9 +483,37 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           
           {/* Text content (skip if it was just rendered as a townhouse card) */}
           {decryptedContent && decryptedContent !== 'Sent a file' && decryptedContent !== '[Voice message]' && !hasCard && (
-            <p className="text-sm break-words whitespace-pre-wrap leading-relaxed tracking-tight">
-              {decryptedContent}
-            </p>
+            <div className="space-y-2">
+              <p className="text-sm break-words whitespace-pre-wrap leading-relaxed tracking-tight">
+                {decryptedContent}
+              </p>
+              {linkPreview && (
+                <a
+                  href={linkPreview.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block mt-2 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                >
+                  {linkPreview.image && (
+                    <img 
+                      src={linkPreview.image} 
+                      alt={linkPreview.title} 
+                      className="w-full h-32 object-cover border-b border-black/10 dark:border-white/10"
+                    />
+                  )}
+                  <div className="p-3">
+                    <h5 className="font-bold text-xs line-clamp-1 text-gray-900 dark:text-white">
+                      {linkPreview.title || linkPreview.url}
+                    </h5>
+                    {linkPreview.description && (
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                        {linkPreview.description}
+                      </p>
+                    )}
+                  </div>
+                </a>
+              )}
+            </div>
           )}
           
           {/* Timestamp */}

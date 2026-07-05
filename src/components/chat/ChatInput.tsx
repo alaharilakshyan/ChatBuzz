@@ -1,10 +1,11 @@
 import React, { KeyboardEvent, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Paperclip, X, Mic, StopCircle, Flame, Eye } from 'lucide-react';
+import { Send, Paperclip, X, Mic, StopCircle, Flame, Eye, Reply } from 'lucide-react';
 import { useVoiceRecording } from '@/hooks/useVoiceRecording';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface ChatInputProps {
   value: string;
@@ -19,6 +20,15 @@ interface ChatInputProps {
   onEphemeralToggle?: (enabled: boolean) => void;
   isOneTimeView?: boolean;
   onOneTimeViewToggle?: (enabled: boolean) => void;
+  replyingTo?: {
+    _id: string;
+    content: string;
+    sender: {
+      username: string;
+      avatar_url: string | null;
+    };
+  } | null;
+  onCancelReply?: () => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -34,6 +44,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onEphemeralToggle,
   isOneTimeView = false,
   onOneTimeViewToggle,
+  replyingTo,
+  onCancelReply,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { isRecording, recordingTime, startRecording, stopRecording, cancelRecording } = useVoiceRecording();
@@ -99,6 +111,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           >
             Cancel
           </Button>
+        </div>
+      )}
+      
+      {replyingTo && (
+        <div className="mb-3 p-3 bg-[#9AC68A]/10 dark:bg-[#4ADE80]/10 border border-[#9AC68A]/20 dark:border-[#4ADE80]/20 rounded-2xl">
+          <div className="flex items-start gap-2">
+            <Reply className="h-4 w-4 text-[#9AC68A] dark:text-[#4ADE80] mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <Avatar className="h-5 w-5">
+                  <AvatarImage src={replyingTo.sender.avatar_url || undefined} />
+                  <AvatarFallback className="text-[10px] bg-[#9AC68A] dark:bg-[#4ADE80] text-white dark:text-slate-950">
+                    {replyingTo.sender.username.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-xs font-semibold text-[#9AC68A] dark:text-[#4ADE80]">
+                  Replying to {replyingTo.sender.username}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 dark:text-gray-300 truncate">
+                {replyingTo.content}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onCancelReply}
+              className="h-6 w-6 p-0 hover:bg-[#9AC68A]/20 dark:hover:bg-[#4ADE80]/20 rounded-lg"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
       )}
       

@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSocket } from '@/contexts/SocketContext';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SmilePlus } from 'lucide-react';
 
 interface Reaction {
-  id: string;
   emoji: string;
-  user_id: string;
-  count?: number;
+  userId: string;
+  username: string;
 }
 
 interface MessageReactionsProps {
@@ -19,54 +20,84 @@ interface MessageReactionsProps {
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
 export const MessageReactions: React.FC<MessageReactionsProps> = ({ messageId, currentUserId }) => {
+  const { getToken } = useAuth();
+  const { socket } = useSocket();
   const { toast } = useToast();
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchReactions();
-  }, [messageId]);
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-  const fetchReactions = async () => {
-    // TODO: Connect to backend API for reactions
-    setReactions([]);
-  };
+  useEffect(() => {
+    // Listen for real-time reaction updates
+    if (!socket) return;
+
+    const handleReactionUpdate = ({ messageId: updatedMessageId, reactions: updatedReactions }: { messageId: string, reactions: Reaction[] }) => {
+      if (updatedMessageId === messageId) {
+        setReactions(updatedReactions);
+      }
+    };
+    
+    socket.on('message_reaction_updated', handleReactionUpdate);
+    
+    return () => {
+      socket.off('message_reaction_updated', handleReactionUpdate);
+    };
+  }, [socket, messageId]);
 
   const handleReaction = async (emoji: string) => {
     if (loading) return;
     setLoading(true);
 
     try {
-      // TODO: Connect to backend API for toggling reactions
-      toast({
-        title: 'Notice',
-        description: 'Reactions not yet implemented with new API',
-      });
+      // Use socket for real-time reaction update
+      if (socket) {
+        socket.emit('message_reaction', { messageId, emoji });
+      }
     } catch (error) {
       console.error('Error updating reaction:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update reaction',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  // Group reactions by emoji and count
+  const groupedReactions = reactions.reduce((acc, reaction) => {
+    if (!acc[reaction.emoji]) {
+      acc[reaction.emoji] = { count: 0, users: [] };
+    }
+    acc[reaction.emoji].count++;
+    acc[reaction.emoji].users.push(reaction.username);
+    return acc;
+  }, {} as Record<string, { count: number; users: string[] }>);
+
   return (
     <div className="flex items-center gap-1 flex-wrap mt-1">
-      {reactions.map((reaction: any) => (
-        <Button
-          key={reaction.id}
-          variant={reaction.hasReacted ? 'default' : 'secondary'}
-          size="sm"
-          className="h-6 px-2 text-xs rounded-full"
-          onClick={() => handleReaction(reaction.emoji)}
-        >
-          <span>{reaction.emoji}</span>
-          {reaction.count > 1 && <span className="ml-1">{reaction.count}</span>}
-        </Button>
-      ))}
+      {Object.entries(groupedReactions).map(([emoji, { count, users }]) => {
+        const hasReacted = reactions.some(r => r.emoji === emoji && r.userId === currentUserId);
+        return (
+          <Button
+            key={emoji}
+            variant={hasReacted ? 'default' : 'secondary'}
+            size="sm"
+            className="h-6 px-2 text-xs rounded-full bg-[#9AC68A]/20 dark:bg-[#4ADE80]/20 hover:bg-[#9AC68A]/30 dark:hover:bg-[#4ADE80]/30"
+            onClick={() => handleReaction(emoji)}
+            title={users.join(', ')}
+          >
+            <span>{emoji}</span>
+            <span className="ml-1">{count}</span>
+          </Button>
+        );
+      })}
 
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full">
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full hover:bg-muted">
             <SmilePlus className="h-3 w-3" />
           </Button>
         </PopoverTrigger>

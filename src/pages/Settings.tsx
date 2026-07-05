@@ -1,21 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Upload, ArrowLeft, Bell, Lock, Eye } from 'lucide-react';
 import { FeedbackDialog } from '@/components/settings/FeedbackDialog';
 import { useNavigate } from 'react-router-dom';
 
 const Settings = () => {
-  const { user, getToken } = useAuth();
+  const { user, getToken, updateProfile } = useAuth();
   const { toast } = useToast();
   const [uploadingBackground, setUploadingBackground] = useState(false);
   const navigate = useNavigate();
+  
+  const [preferences, setPreferences] = useState({
+    onlineStatusVisible: true,
+    readReceiptsEnabled: true,
+    typingIndicatorsEnabled: true,
+    messageNotificationsEnabled: true,
+    soundEnabled: true
+  });
+  const [saving, setSaving] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+  useEffect(() => {
+    if (user && (user as any).preferences) {
+      setPreferences((user as any).preferences);
+    }
+  }, [user]);
+
+  const handlePreferenceChange = async (key: string, value: boolean) => {
+    setPreferences(prev => ({ ...prev, [key]: value }));
+    setSaving(true);
+    
+    try {
+      await updateProfile({ preferences: { ...preferences, [key]: value } });
+      toast({ title: 'Success', description: 'Preference updated' });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to update preference', variant: 'destructive' });
+      // Revert on error
+      setPreferences(prev => ({ ...prev, [key]: !value }));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const uploadFile = async (file: File) => {
     const token = await getToken();
@@ -109,14 +141,22 @@ const Settings = () => {
                 <p className="font-bold">Push Notifications</p>
                 <p className="text-xs text-gray-500">Receive alerts for new messages</p>
               </div>
-              <input type="checkbox" className="toggle border-transparent bg-slate-300 dark:bg-slate-700 checked:bg-[#9AC68A]" defaultChecked />
+              <Switch
+                checked={preferences.messageNotificationsEnabled}
+                onCheckedChange={(checked) => handlePreferenceChange('messageNotificationsEnabled', checked)}
+                disabled={saving}
+              />
             </div>
             <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-slate-800/50 rounded-[16px]">
               <div>
-                <p className="font-bold">Message Previews</p>
-                <p className="text-xs text-gray-500">Show message content in notifications</p>
+                <p className="font-bold">Sound Effects</p>
+                <p className="text-xs text-gray-500">Play sounds for messages</p>
               </div>
-              <input type="checkbox" className="toggle border-transparent bg-slate-300 dark:bg-slate-700 checked:bg-[#9AC68A]" defaultChecked />
+              <Switch
+                checked={preferences.soundEnabled}
+                onCheckedChange={(checked) => handlePreferenceChange('soundEnabled', checked)}
+                disabled={saving}
+              />
             </div>
           </div>
         </Card>
@@ -132,14 +172,33 @@ const Settings = () => {
                 <p className="font-bold">Online Status</p>
                 <p className="text-xs text-gray-500">Let others see when you're online</p>
               </div>
-              <input type="checkbox" className="toggle border-transparent bg-slate-300 dark:bg-slate-700 checked:bg-[#9AC68A]" defaultChecked />
+              <Switch
+                checked={preferences.onlineStatusVisible}
+                onCheckedChange={(checked) => handlePreferenceChange('onlineStatusVisible', checked)}
+                disabled={saving}
+              />
             </div>
             <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-slate-800/50 rounded-[16px]">
               <div>
                 <p className="font-bold">Read Receipts</p>
                 <p className="text-xs text-gray-500">Show when you've read messages</p>
               </div>
-              <input type="checkbox" className="toggle border-transparent bg-slate-300 dark:bg-slate-700 checked:bg-[#9AC68A]" defaultChecked />
+              <Switch
+                checked={preferences.readReceiptsEnabled}
+                onCheckedChange={(checked) => handlePreferenceChange('readReceiptsEnabled', checked)}
+                disabled={saving}
+              />
+            </div>
+            <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-slate-800/50 rounded-[16px]">
+              <div>
+                <p className="font-bold">Typing Indicators</p>
+                <p className="text-xs text-gray-500">Show when you're typing</p>
+              </div>
+              <Switch
+                checked={preferences.typingIndicatorsEnabled}
+                onCheckedChange={(checked) => handlePreferenceChange('typingIndicatorsEnabled', checked)}
+                disabled={saving}
+              />
             </div>
           </div>
         </Card>

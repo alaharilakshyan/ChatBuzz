@@ -26,6 +26,8 @@ interface ChatHeaderProps {
   onVoiceCall?: () => void;
   onVideoCall?: () => void;
   onBack?: () => void;
+  onGlobalSearch?: () => void;
+  onMediaClick?: () => void;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({ 
@@ -40,7 +42,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onSearchChange,
   onVoiceCall,
   onVideoCall,
-  onBack
+  onBack,
+  onGlobalSearch,
+  onMediaClick
 }) => {
   const [showSearch, setShowSearch] = React.useState(false);
 
@@ -127,6 +131,32 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               className={`h-9 w-9 rounded-full transition-colors ${showSearch ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
             >
               <Search className="h-5 w-5" />
+            </Button>
+          )}
+
+          {onGlobalSearch && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onGlobalSearch}
+              title="Global message search"
+              className="h-9 w-9 rounded-full hover:bg-muted"
+            >
+              <Search className="h-5 w-5 text-indigo-500" />
+            </Button>
+          )}
+
+          {onMediaClick && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onMediaClick}
+              title="Shared media gallery"
+              className="h-9 w-9 rounded-full hover:bg-muted"
+            >
+              <Video className="h-5 w-5 text-teal-600 hidden" />
+              {/* Using a Lucide image icon representation inside */}
+              <span className="text-sm">🖼️</span>
             </Button>
           )}
           

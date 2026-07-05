@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useUser, useAuth as useClerkAuth, useClerk } from '@clerk/clerk-react';
-import { generateKeyPair, exportPublicKey, exportPrivateKey } from '@/utils/crypto';
+
 
 interface Profile {
   id: string;
@@ -8,6 +8,13 @@ interface Profile {
   user_tag: string;
   avatar_url: string | null;
   bio: string | null;
+  preferences?: {
+    onlineStatusVisible: boolean;
+    readReceiptsEnabled: boolean;
+    typingIndicatorsEnabled: boolean;
+    messageNotificationsEnabled: boolean;
+    soundEnabled: boolean;
+  };
 }
 
 interface AuthUser {
@@ -19,6 +26,13 @@ interface AuthUser {
   avatar: string | null;
   bio: string | null;
   publicKey?: string | null;
+  preferences?: {
+    onlineStatusVisible: boolean;
+    readReceiptsEnabled: boolean;
+    typingIndicatorsEnabled: boolean;
+    messageNotificationsEnabled: boolean;
+    soundEnabled: boolean;
+  };
 }
 
 interface AuthContextType {
@@ -70,16 +84,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (res.ok) {
             const data = await res.json();
             const p: Profile = {
-              id: clerkUser.id,
+              id: data._id, // Use MongoDB _id for encryption key consistency
               username: data.username,
               user_tag: data.user_tag,
               avatar_url: data.avatar_url,
               bio: data.bio
             };
             setProfile(p);
-            
+
             setUser({
-              id: clerkUser.id,
+              id: data._id, // Use MongoDB _id for encryption key consistency
               email: clerkUser.primaryEmailAddress?.emailAddress || '',
               username: data.username,
               user_tag: data.user_tag,
@@ -88,58 +102,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               bio: data.bio,
               publicKey: data.publicKey
             });
+          } else {
+            // Backend /users/me returned non-OK: log details and fall back to Clerk user
+            const resText = await res.text();
+            console.error('/users/me returned non-OK', { status: res.status, body: resText, url: `${import.meta.env.VITE_API_URL}/users/me` });
 
-            // Key handling
-            let privKey = localStorage.getItem('e2e_privKey');
-            let pubKey = localStorage.getItem('e2e_pubKey');
-            
-            if (!privKey || !pubKey || !data.publicKey) {
-               const keyPair = await generateKeyPair();
-               pubKey = await exportPublicKey(keyPair.publicKey);
-               privKey = await exportPrivateKey(keyPair.privateKey);
-               
-               localStorage.setItem('e2e_privKey', privKey);
-               localStorage.setItem('e2e_pubKey', pubKey);
-               
-               // Update user on backend
-               await fetch(`${import.meta.env.VITE_API_URL}/users/me`, {
-                 method: 'PATCH',
-                 headers: {
-                   'Content-Type': 'application/json',
-                   Authorization: `Bearer ${token}`
-                 },
-                 body: JSON.stringify({ publicKey: pubKey })
-               });
-            } else {
-              // Backend /users/me returned non-OK: fall back to Clerk user
-              // information so the client treats the session as authenticated
-              // and avoids redirect loops while the backend recovers.
-              const fallbackProfile: Profile = {
-                id: clerkUser.id,
-                username: clerkUser.username || clerkUser.firstName || 'User',
-                user_tag: '0000',
-                avatar_url: clerkUser.imageUrl,
-                bio: ''
-              };
-              setProfile(fallbackProfile);
-              setUser({
-                id: clerkUser.id,
-                email: clerkUser.primaryEmailAddress?.emailAddress || '',
-                username: fallbackProfile.username,
-                user_tag: fallbackProfile.user_tag,
-                avatar_url: fallbackProfile.avatar_url,
-                avatar: fallbackProfile.avatar_url,
-                bio: fallbackProfile.bio,
-                publicKey: null
-              });
-              console.warn('/users/me returned non-OK; using Clerk fallback profile');
-            }
+            // Fallback to Clerk profile to avoid redirect loops while backend is unavailable
+            // Note: Using Clerk ID here may cause encryption issues, but it's a fallback
+            const fallbackProfile: Profile = {
+              id: clerkUser.id, // Fallback to Clerk ID (encryption may not work)
+              username: clerkUser.username || clerkUser.firstName || 'User',
+              user_tag: '0000',
+              avatar_url: clerkUser.imageUrl,
+              bio: ''
+            };
+            setProfile(fallbackProfile);
+            setUser({
+              id: clerkUser.id, // Fallback to Clerk ID (encryption may not work)
+              email: clerkUser.primaryEmailAddress?.emailAddress || '',
+              username: fallbackProfile.username,
+              user_tag: fallbackProfile.user_tag,
+              avatar_url: fallbackProfile.avatar_url,
+              avatar: fallbackProfile.avatar_url,
+              bio: fallbackProfile.bio,
+              publicKey: null
+            });
+            console.warn('/users/me returned non-OK; using Clerk fallback profile (encryption may not work)');
           }
         } catch (err) {
           console.error("Failed to fetch profile", err);
           // Fallback on throw as well
+          // Note: Using Clerk ID here may cause encryption issues, but it's a fallback
           const p: Profile = {
-            id: clerkUser.id,
+            id: clerkUser.id, // Fallback to Clerk ID (encryption may not work)
             username: clerkUser.username || clerkUser.firstName || "User",
             user_tag: "0000",
             avatar_url: clerkUser.imageUrl,
@@ -147,7 +142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setProfile(p);
           setUser({
-            id: clerkUser.id,
+            id: clerkUser.id, // Fallback to Clerk ID (encryption may not work)
             email: clerkUser.primaryEmailAddress?.emailAddress || '',
             username: p.username,
             user_tag: p.user_tag,
@@ -191,7 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await res.json();
       
       const p: Profile = {
-        id: clerkUser!.id,
+        id: data._id, // Use MongoDB _id for encryption key consistency
         username: data.username,
         user_tag: data.user_tag,
         avatar_url: data.avatar_url,
@@ -200,7 +195,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile(p);
       
       setUser({
-        id: clerkUser!.id,
+        id: data._id, // Use MongoDB _id for encryption key consistency
         email: clerkUser!.primaryEmailAddress?.emailAddress || '',
         username: data.username,
         user_tag: data.user_tag,

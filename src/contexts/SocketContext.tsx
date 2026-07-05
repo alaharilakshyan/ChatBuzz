@@ -32,40 +32,56 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const { user: clerkUser } = useUser();
 
   useEffect(() => {
-    // Allow socket to initialize when Clerk session exists even if our
-    // backend `user` object hasn't been fully populated yet.
-    const effectiveUser = user || (clerkUser ? { id: clerkUser.id } : null);
-    if (!effectiveUser) return;
+    let cleanupSocket: (() => void) | null = null;
 
-    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
-      withCredentials: true,
-      transports: ['websocket', 'polling']
-    });
+    const initSocket = async () => {
+      // Allow socket to initialize when Clerk session exists even if our
+      // backend `user` object hasn't been fully populated yet.
+      const effectiveUser = user || (clerkUser ? { id: clerkUser.id } : null);
+      if (!effectiveUser) return;
 
-    setSocket(newSocket);
+      const token = await getToken();
+      if (!token) return;
 
-    newSocket.on('connect', () => {
-      setIsConnected(true);
-      newSocket.emit('user_online', effectiveUser.id);
-    });
+      const rawUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const backendUrl = rawUrl.endsWith('/api') ? rawUrl.replace(/\/api$/, '') : rawUrl;
 
-    newSocket.on('disconnect', () => {
-      setIsConnected(false);
-    });
-
-    newSocket.on('user_status_change', ({ userId, status }) => {
-      setOnlineUsers(prev => {
-        const next = new Set(prev);
-        if (status === 'online') next.add(userId);
-        else next.delete(userId);
-        return next;
+      const newSocket = io(backendUrl, {
+        auth: { token },
+        withCredentials: true,
+        transports: ['websocket', 'polling']
       });
-    });
 
-    return () => {
-      newSocket.disconnect();
+      setSocket(newSocket);
+
+      newSocket.on('connect', () => {
+        setIsConnected(true);
+        newSocket.emit('user_online', effectiveUser.id);
+      });
+
+      newSocket.on('disconnect', () => {
+        setIsConnected(false);
+      });
+
+      newSocket.on('user_status_change', ({ userId, status }) => {
+        setOnlineUsers(prev => {
+          const next = new Set(prev);
+          if (status === 'online') next.add(userId);
+          else next.delete(userId);
+          return next;
+        });
+      });
+
+      cleanupSocket = () => {
+        newSocket.disconnect();
+      };
     };
-  }, [user]);
+
+    initSocket();
+    return () => {
+      cleanupSocket?.();
+    };
+  }, [user, getToken, clerkUser]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected, onlineUsers }}>

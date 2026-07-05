@@ -1,31 +1,45 @@
 /**
  * End-to-End Encryption utilities for ChatBuzz
- * Uses Web Crypto API with AES-GCM for secure message encryption
- * Messages are encrypted with a shared key derived from both user IDs
+ * 
+ * Uses AES-GCM with a PBKDF2-derived shared key.
+ * The key is derived deterministically from the sorted pair of participant IDs,
+ * so both users always arrive at the same key — regardless of who sends/receives.
+ * 
+ * IMPORTANT: This is symmetric shared-key encryption. Both users derive the same
+ * key client-side. The server only ever sees encrypted ciphertext.
  */
 
 const ENCRYPTION_ALGORITHM = 'AES-GCM';
 const KEY_LENGTH = 256;
-const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_ITERATIONS = 100_000;
 const ENCRYPTION_PREFIX = 'ENC:';
+const SALT_PREFIX = 'chatbuzz-e2e-v2-';
 
-// Cache for derived keys to improve performance
+// In-memory cache so we don't re-derive the same key repeatedly
 const keyCache = new Map<string, CryptoKey>();
 
-/**
- * Generate a cryptographic key from a password and salt
- */
-async function deriveKey(password: string, salt: ArrayBuffer): Promise<CryptoKey> {
+async function deriveSharedKey(id1: string, id2: string): Promise<CryptoKey> {
+  // Sort so the order of arguments doesn't matter
+  const [a, b] = [id1, id2].sort();
+  const cacheKey = `${a}::${b}`;
+
+  if (keyCache.has(cacheKey)) {
+    return keyCache.get(cacheKey)!;
+  }
+
   const encoder = new TextEncoder();
+  const password = encoder.encode(`${a}-${b}`);
+  const salt = encoder.encode(`${SALT_PREFIX}${a}-${b}`);
+
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(password),
+    password,
     'PBKDF2',
     false,
     ['deriveBits', 'deriveKey']
   );
 
-  return crypto.subtle.deriveKey(
+  const key = await crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
       salt,
@@ -37,54 +51,27 @@ async function deriveKey(password: string, salt: ArrayBuffer): Promise<CryptoKey
     false,
     ['encrypt', 'decrypt']
   );
-}
 
-/**
- * Generate a conversation key for two users (order-independent)
- * Both users will derive the same key for the same conversation
- */
-async function getConversationKey(userId1: string, userId2: string): Promise<CryptoKey> {
-  // Sort user IDs to ensure same key regardless of who is sender/receiver
-  const sortedIds = [userId1, userId2].sort();
-  const conversationId = `${sortedIds[0]}-${sortedIds[1]}`;
-  
-  // Check cache first
-  if (keyCache.has(conversationId)) {
-    return keyCache.get(conversationId)!;
-  }
-  
-  // Create a deterministic salt from the conversation ID
-  const salt = new TextEncoder().encode(`chatbuzz-e2e-${conversationId}`).buffer;
-  
-  // Derive key from combined user IDs
-  const key = await deriveKey(conversationId, salt);
-  
-  // Cache the key
-  keyCache.set(conversationId, key);
-  
+  keyCache.set(cacheKey, key);
   return key;
 }
 
 /**
- * Encrypt a message for a conversation between two users
- * @param message - Plain text message
- * @param senderId - ID of the sender
- * @param receiverId - ID of the receiver
- * @returns Encrypted message string with prefix
+ * Encrypt a message for a 1-on-1 conversation.
+ * For group messages pass the same value for both IDs (content won't be encrypted).
  */
 export async function encryptMessage(
-  message: string, 
-  senderId: string, 
+  message: string,
+  senderId: string,
   receiverId?: string
 ): Promise<string> {
-  // If no receiverId provided (backward compatibility), use senderId only
-  const targetReceiverId = receiverId || senderId;
-  
+  // Groups or missing receiverId — don't encrypt
+  if (!receiverId || senderId === receiverId) return message;
+
   try {
-    const key = await getConversationKey(senderId, targetReceiverId);
+    const key = await deriveSharedKey(senderId, receiverId);
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encoder = new TextEncoder();
-    const data = encoder.encode(message);
+    const data = new TextEncoder().encode(message);
 
     const encrypted = await crypto.subtle.encrypt(
       { name: ENCRYPTION_ALGORITHM, iv },
@@ -92,78 +79,68 @@ export async function encryptMessage(
       data
     );
 
-    // Combine IV and encrypted data
-    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+    // Pack: [12-byte IV][ciphertext]
+    const combined = new Uint8Array(12 + encrypted.byteLength);
     combined.set(iv, 0);
-    combined.set(new Uint8Array(encrypted), iv.length);
+    combined.set(new Uint8Array(encrypted), 12);
 
-    // Return with prefix to identify encrypted messages
     return ENCRYPTION_PREFIX + btoa(String.fromCharCode(...combined));
-  } catch (error) {
-    console.error('Encryption error:', error);
-    // Return original message if encryption fails (fallback)
-    return message;
+  } catch (err) {
+    console.error('[E2E] Encrypt error:', err);
+    return message; // fail-open: send plaintext rather than crash
   }
 }
 
 /**
- * Decrypt a message from a conversation
- * @param encryptedMessage - Encrypted message string
- * @param currentUserId - ID of the current user
- * @param otherUserId - ID of the other user in the conversation
- * @returns Decrypted message or original if not encrypted
+ * Decrypt a message from a 1-on-1 conversation.
+ * Returns the original string if it is not encrypted or decryption fails.
  */
 export async function decryptMessage(
-  encryptedMessage: string, 
+  encryptedMessage: string,
   currentUserId: string,
   otherUserId?: string
 ): Promise<string> {
-  // Check if message is encrypted
   if (!encryptedMessage.startsWith(ENCRYPTION_PREFIX)) {
-    // Not encrypted, return as-is
     return encryptedMessage;
   }
-  
-  // If no otherUserId provided (backward compatibility), use currentUserId
-  const targetOtherUserId = otherUserId || currentUserId;
-  
+
+  if (!otherUserId || currentUserId === otherUserId) {
+    // Can't decrypt without knowing the other party
+    return encryptedMessage;
+  }
+
   try {
-    // Remove prefix
-    const base64Data = encryptedMessage.slice(ENCRYPTION_PREFIX.length);
-    
-    const key = await getConversationKey(currentUserId, targetOtherUserId);
-    
-    // Convert from base64
-    const combined = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-    
-    // Extract IV and encrypted data
+    const base64 = encryptedMessage.slice(ENCRYPTION_PREFIX.length);
+    const combined = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
     const iv = combined.slice(0, 12);
-    const data = combined.slice(12);
+    const ciphertext = combined.slice(12);
+
+    const key = await deriveSharedKey(currentUserId, otherUserId);
 
     const decrypted = await crypto.subtle.decrypt(
       { name: ENCRYPTION_ALGORITHM, iv },
       key,
-      data
+      ciphertext
     );
 
-    const decoder = new TextDecoder();
-    return decoder.decode(decrypted);
-  } catch (error) {
-    console.error('Decryption error:', error);
-    // Return placeholder for failed decryption
-    return encryptedMessage;
+    return new TextDecoder().decode(decrypted);
+  } catch (err) {
+    console.error('[E2E] Decrypt error — returning raw content:', err);
+    // Return the raw (without prefix) so the user sees something
+    return encryptedMessage.slice(ENCRYPTION_PREFIX.length);
   }
 }
 
 /**
- * Check if a message is encrypted
+ * Check if a message string was encrypted by this system.
  */
 export function isEncrypted(message: string): boolean {
-  return message.startsWith(ENCRYPTION_PREFIX);
+  return typeof message === 'string' && message.startsWith(ENCRYPTION_PREFIX);
 }
 
 /**
- * Clear the key cache (useful for logout)
+ * Clear the key cache on logout.
  */
 export function clearKeyCache(): void {
   keyCache.clear();

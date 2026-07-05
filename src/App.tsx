@@ -25,10 +25,24 @@ const queryClient = new QueryClient();
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 if (!PUBLISHABLE_KEY) {
-  throw new Error("Missing Publishable Key")
+  // Don't throw in production builds — render a minimal fallback so the
+  // app doesn't crash the whole SPA when env var is missing (common on
+  // deployments). This avoids Vercel showing a platform 404/500 page.
+  console.error("Missing VITE_CLERK_PUBLISHABLE_KEY environment variable.");
 }
 
 const App = () => {
+  if (!PUBLISHABLE_KEY) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="max-w-md text-center">
+          <h2 className="text-2xl font-bold">Configuration Error</h2>
+          <p className="mt-4 text-sm text-muted-foreground">Missing Clerk publishable key. Please set `VITE_CLERK_PUBLISHABLE_KEY` in your environment.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
       <ErrorBoundary>

@@ -1,29 +1,51 @@
 import express from 'express';
 import User from '../models/User.js';
 import FriendRequest from '../models/FriendRequest.js';
+import Block from '../models/Block.js';
+import { validateRequest, rules } from '../utils/validator.js';
+import { sendSuccess, sendError } from '../utils/response.js';
 
 const router = express.Router();
 
+// Validation Schemas
+const requestFriendSchema = {
+  recipientId: { required: true, validate: rules.objectId }
+};
+
+const respondFriendSchema = {
+  requestId: { required: true, validate: rules.objectId },
+  status: { required: true, validate: rules.enum(['accepted', 'rejected']) }
+};
+
 /**
  * POST /api/friends/request
- * Send a friend request to another user by their MongoDB _id or clerkId
+ * Send a friend request to another user
  */
-router.post('/request', async (req, res) => {
+router.post('/request', validateRequest(requestFriendSchema), async (req, res) => {
   try {
-    const requesterUser = await User.findOne({ clerkId: req.auth.userId });
-    if (!requesterUser) return res.status(401).json({ error: 'Unauthorized' });
+    const requesterUser = await User.findById(req.session.user.id);
+    if (!requesterUser) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
-    const { recipientId } = req.body; // MongoDB _id of recipient
-    if (!recipientId) return res.status(400).json({ error: 'recipientId is required' });
+    const { recipientId } = req.body;
 
     if (requesterUser._id.toString() === recipientId) {
-      return res.status(400).json({ error: 'Cannot send a friend request to yourself' });
+      return sendError(res, 'Bad Request', 'Cannot send a friend request to yourself', 'SELF_REQUEST', 400);
     }
 
     const recipientUser = await User.findById(recipientId);
-    if (!recipientUser) return res.status(404).json({ error: 'User not found' });
+    if (!recipientUser) return sendError(res, 'Not Found', 'User not found', 'USER_NOT_FOUND', 404);
 
-    // Check if a request already exists in either direction
+    // Check block status (cannot request if blocked by either party)
+    const block = await Block.findOne({
+      $or: [
+        { blocker: requesterUser._id, blocked: recipientId },
+        { blocker: recipientId, blocked: requesterUser._id }
+      ]
+    });
+    if (block) {
+      return sendError(res, 'Forbidden', 'Action blocked', 'BLOCKED', 403);
+    }
+
     const existing = await FriendRequest.findOne({
       $or: [
         { requester: requesterUser._id, recipient: recipientUser._id },
@@ -33,161 +55,121 @@ router.post('/request', async (req, res) => {
 
     if (existing) {
       if (existing.status === 'accepted') {
-        return res.status(400).json({ error: 'Already friends' });
+        return sendError(res, 'Bad Request', 'Already friends', 'ALREADY_FRIENDS', 400);
       }
       if (existing.status === 'pending') {
-        return res.status(400).json({ error: 'Friend request already pending' });
+        return sendError(res, 'Bad Request', 'Friend request already pending', 'REQUEST_PENDING', 400);
       }
-      // If rejected, allow re-sending by updating status
+      // If previously rejected, allow re-sending
       existing.status = 'pending';
       existing.requester = requesterUser._id;
       existing.recipient = recipientUser._id;
       await existing.save();
       const populated = await existing.populate([
-        { path: 'requester', select: 'username avatar_url user_tag clerkId' },
-        { path: 'recipient', select: 'username avatar_url user_tag clerkId' }
+        { path: 'requester', select: 'username avatar_url user_tag authId' },
+        { path: 'recipient', select: 'username avatar_url user_tag authId' }
       ]);
-      return res.json(populated);
+      return sendSuccess(res, populated);
     }
 
-    const request = await FriendRequest.create({
+    const newRequest = await FriendRequest.create({
       requester: requesterUser._id,
-      recipient: recipientUser._id
+      recipient: recipientUser._id,
+      status: 'pending'
     });
 
-    const populated = await request.populate([
-      { path: 'requester', select: 'username avatar_url user_tag clerkId' },
-      { path: 'recipient', select: 'username avatar_url user_tag clerkId' }
+    const populated = await newRequest.populate([
+      { path: 'requester', select: 'username avatar_url user_tag authId' },
+      { path: 'recipient', select: 'username avatar_url user_tag authId' }
     ]);
 
-    res.status(201).json(populated);
+    return sendSuccess(res, populated, 201);
   } catch (err) {
     console.error('Error sending friend request:', err);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
 /**
- * GET /api/friends/requests
- * Get all incoming (pending) friend requests for the current user
- */
-router.get('/requests', async (req, res) => {
-  try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-    const requests = await FriendRequest.find({
-      recipient: user._id,
-      status: 'pending'
-    }).populate('requester', 'username avatar_url user_tag clerkId');
-
-    res.json(requests);
-  } catch (err) {
-    console.error('Error fetching friend requests:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-/**
- * GET /api/friends/sent
- * Get all outgoing (pending) friend requests sent by the current user
- */
-router.get('/sent', async (req, res) => {
-  try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-    const requests = await FriendRequest.find({
-      requester: user._id,
-      status: 'pending'
-    }).populate('recipient', 'username avatar_url user_tag clerkId');
-
-    res.json(requests);
-  } catch (err) {
-    console.error('Error fetching sent requests:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-/**
- * PATCH /api/friends/request/:requestId
+ * POST /api/friends/respond
  * Accept or reject a friend request
  */
-router.patch('/request/:requestId', async (req, res) => {
+router.post('/respond', validateRequest(respondFriendSchema), async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
-    const { status } = req.body; // 'accepted' or 'rejected'
-    if (!['accepted', 'rejected'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Use "accepted" or "rejected"' });
-    }
+    const { requestId, status } = req.body;
 
-    const request = await FriendRequest.findById(req.params.requestId);
-    if (!request) return res.status(404).json({ error: 'Request not found' });
+    const request = await FriendRequest.findById(requestId);
+    if (!request) return sendError(res, 'Not Found', 'Request not found', 'REQUEST_NOT_FOUND', 404);
 
-    // Only the recipient can accept/reject
     if (request.recipient.toString() !== user._id.toString()) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return sendError(res, 'Forbidden', 'Not authorized to respond to this request', 'FORBIDDEN', 403);
     }
 
     request.status = status;
     await request.save();
 
     const populated = await request.populate([
-      { path: 'requester', select: 'username avatar_url user_tag clerkId' },
-      { path: 'recipient', select: 'username avatar_url user_tag clerkId' }
+      { path: 'requester', select: 'username avatar_url user_tag authId' },
+      { path: 'recipient', select: 'username avatar_url user_tag authId' }
     ]);
 
-    res.json(populated);
+    return sendSuccess(res, populated);
   } catch (err) {
-    console.error('Error updating friend request:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error responding to friend request:', err);
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
 /**
  * DELETE /api/friends/request/:requestId
- * Cancel a sent friend request (by requester) or remove a friend (either party)
+ * Cancel a friend request or remove a friend
  */
 router.delete('/request/:requestId', async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
-    const request = await FriendRequest.findById(req.params.requestId);
-    if (!request) return res.status(404).json({ error: 'Request not found' });
+    const { requestId } = req.params;
+    if (!rules.objectId(requestId)) {
+      return sendError(res, 'Validation Error', 'Invalid request ID format', 'VALIDATION_ERROR', 400);
+    }
+
+    const request = await FriendRequest.findById(requestId);
+    if (!request) return sendError(res, 'Not Found', 'Request not found', 'REQUEST_NOT_FOUND', 404);
 
     const isRequester = request.requester.toString() === user._id.toString();
     const isRecipient = request.recipient.toString() === user._id.toString();
-    if (!isRequester && !isRecipient) return res.status(403).json({ error: 'Forbidden' });
+    if (!isRequester && !isRecipient) {
+      return sendError(res, 'Forbidden', 'Forbidden', 'FORBIDDEN', 403);
+    }
 
     await request.deleteOne();
-    res.json({ message: 'Removed' });
+    return sendSuccess(res, { success: true, message: 'Removed' });
   } catch (err) {
     console.error('Error removing friend request:', err);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
 /**
  * GET /api/friends
- * Get all accepted friends for the current user (with full profile info)
+ * Get all accepted friends
  */
 router.get('/', async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
     const friendships = await FriendRequest.find({
       $or: [
         { requester: user._id, status: 'accepted' },
         { recipient: user._id, status: 'accepted' }
       ]
-    }).populate('requester recipient', 'username avatar_url user_tag clerkId publicKey status lastSeen');
+    }).populate('requester recipient', 'username avatar_url user_tag authId publicKey status lastSeen');
 
-    // Get list of users blocked by current user or blocking current user
-    const Block = (await import('../models/Block.js')).default;
     const blocks = await Block.find({
       $or: [
         { blocker: user._id },
@@ -198,48 +180,54 @@ router.get('/', async (req, res) => {
       b.blocker.toString() === user._id.toString() ? b.blocked.toString() : b.blocker.toString()
     );
 
-    // Return the "other" user in each friendship, excluding blocked ones
     const friends = friendships
       .map(f => {
         const isRequester = f.requester._id.toString() === user._id.toString();
         return isRequester ? f.recipient : f.requester;
       })
-      .filter(friend => friend && !blockedUserIds.includes(friend._id.toString()));
+      .filter(f => !blockedUserIds.includes(f._id.toString()));
 
-    res.json(friends);
+    return sendSuccess(res, friends);
   } catch (err) {
-    console.error('Error fetching friends:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error getting friends:', err);
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
 /**
- * GET /api/friends/status/:targetUserId
- * Get the friendship status between current user and target (by MongoDB _id)
+ * GET /api/friends/status/:userId
+ * Check relationship status with a target user
  */
-router.get('/status/:targetUserId', async (req, res) => {
+router.get('/status/:userId', async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
+
+    const { userId } = req.params;
+    if (!rules.objectId(userId)) {
+      return sendError(res, 'Validation Error', 'Invalid user ID format', 'VALIDATION_ERROR', 400);
+    }
 
     const request = await FriendRequest.findOne({
       $or: [
-        { requester: user._id, recipient: req.params.targetUserId },
-        { requester: req.params.targetUserId, recipient: user._id }
+        { requester: user._id, recipient: userId },
+        { requester: userId, recipient: user._id }
       ]
     });
 
-    if (!request) return res.json({ status: 'none', requestId: null });
+    if (!request) {
+      return sendSuccess(res, { status: 'none', requestId: null, direction: null });
+    }
 
-    const isSelf = request.requester.toString() === user._id.toString();
-    res.json({
+    const direction = request.requester.toString() === user._id.toString() ? 'sent' : 'received';
+    return sendSuccess(res, {
       status: request.status,
       requestId: request._id,
-      direction: isSelf ? 'sent' : 'received'
+      direction
     });
   } catch (err) {
-    console.error('Error fetching friend status:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error getting friendship status:', err);
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 

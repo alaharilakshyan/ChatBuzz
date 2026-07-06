@@ -3,7 +3,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ClerkProvider } from '@clerk/clerk-react';
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { SocketProvider } from "@/contexts/SocketContext";
@@ -22,91 +21,69 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-
-if (!PUBLISHABLE_KEY) {
-  // Don't throw in production builds — render a minimal fallback so the
-  // app doesn't crash the whole SPA when env var is missing (common on
-  // deployments). This avoids Vercel showing a platform 404/500 page.
-  console.error("Missing VITE_CLERK_PUBLISHABLE_KEY environment variable.");
-}
-
 const App = () => {
-  if (!PUBLISHABLE_KEY) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="max-w-md text-center">
-          <h2 className="text-2xl font-bold">Configuration Error</h2>
-          <p className="mt-4 text-sm text-muted-foreground">Missing Clerk publishable key. Please set `VITE_CLERK_PUBLISHABLE_KEY` in your environment.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <ThemeProvider>
-            <AuthProvider>
-              <SocketProvider>
-                <TooltipProvider>
-                  <BrowserRouter>
-                    <Routes>
-                      <Route path="/login/*" element={<Login />} />
-                      <Route path="/register/*" element={<Register />} />
-                      <Route path="/forgot-password" element={<ForgotPassword />} />
-                      <Route path="/reset-password" element={<ResetPassword />} />
-                      <Route
-                        path="/"
-                        element={
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <AuthProvider>
+            <SocketProvider>
+              <TooltipProvider>
+                <BrowserRouter>
+                  <Routes>
+                    <Route path="/login/*" element={<Login />} />
+                    <Route path="/register/*" element={<Register />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route
+                      path="/"
+                      element={
+                        <MainLayout>
+                          <Index />
+                        </MainLayout>
+                      }
+                    />
+                    <Route
+                      path="/chat"
+                      element={
+                        <ProtectedRoute>
                           <MainLayout>
-                            <Index />
+                            <Chat />
                           </MainLayout>
-                        }
-                      />
-                      <Route
-                        path="/chat"
-                        element={
-                          <ProtectedRoute>
-                            <MainLayout>
-                              <Chat />
-                            </MainLayout>
-                          </ProtectedRoute>
-                        }
-                      />
-                      <Route
-                        path="/settings"
-                        element={
-                          <ProtectedRoute>
-                            <MainLayout>
-                              <Settings />
-                            </MainLayout>
-                          </ProtectedRoute>
-                        }
-                      />
-                      <Route
-                        path="/profile"
-                        element={
-                          <ProtectedRoute>
-                            <MainLayout>
-                              <Profile />
-                            </MainLayout>
-                          </ProtectedRoute>
-                        }
-                      />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                    <Toaster />
-                    <Sonner />
-                  </BrowserRouter>
-                </TooltipProvider>
-              </SocketProvider>
-            </AuthProvider>
-          </ThemeProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
-    </ClerkProvider>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/settings"
+                      element={
+                        <ProtectedRoute>
+                          <MainLayout>
+                            <Settings />
+                          </MainLayout>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/profile"
+                      element={
+                        <ProtectedRoute>
+                          <MainLayout>
+                            <Profile />
+                          </MainLayout>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                  <Toaster />
+                  <Sonner />
+                </BrowserRouter>
+              </TooltipProvider>
+            </SocketProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 

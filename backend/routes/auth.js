@@ -1,63 +1,60 @@
 import express from 'express';
-import { Webhook } from 'svix';
+import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
+import { validateRequest, rules, sanitizeString } from '../utils/validator.js';
+import { sendSuccess, sendError } from '../utils/response.js';
 
 const router = express.Router();
 
-// Webhook from Clerk when user is created/updated/deleted
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const SIGNING_SECRET = process.env.CLERK_WEBHOOK_SECRET;
+const registerSchema = {
+  username: { required: true, validate: rules.username },
+  email: { required: true, validate: rules.email },
+  password: { required: true, validate: rules.password }
+};
 
-  if (!SIGNING_SECRET) {
-    return res.status(400).json({ error: 'Error: Please add SIGNING_SECRET from Clerk Dashboard to .env' });
-  }
-
-  const payload = req.body;
-  const headers = req.headers;
-
-  const wh = new Webhook(SIGNING_SECRET);
-  let msg;
+// POST /api/auth/register
+router.post('/register', validateRequest(registerSchema), async (req, res) => {
   try {
-    msg = wh.verify(payload, headers);
-  } catch (err) {
-    return res.status(400).json({ error: 'Error: Webhook verification failed' });
-  }
+    const { username, email, password } = req.body;
 
-  const { id } = msg.data;
-  const eventType = msg.type;
+    const sanitizedUsername = sanitizeString(username);
+    const normalizedEmail = email.toLowerCase().trim();
 
-  if (eventType === 'user.created') {
-    const { email_addresses, username, first_name, image_url } = msg.data;
-    const email = email_addresses[0]?.email_address;
-    const displayName = username || first_name || email.split('@')[0];
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      return sendError(res, 'Conflict', 'Email already registered', 'EMAIL_ALREADY_REGISTERED', 400);
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
     const userTag = Math.floor(1000 + Math.random() * 9000).toString();
 
-    try {
-      await User.create({
-        clerkId: id,
-        email: email,
-        username: displayName,
-        user_tag: userTag,
-        avatar_url: image_url
-      });
-      return res.status(200).json({ success: true });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Failed to create user in DB' });
-    }
-  }
+    const user = new User({
+      email: normalizedEmail,
+      username: sanitizedUsername,
+      user_tag: userTag,
+      password: hashedPassword,
+      avatar_url: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(sanitizedUsername)}`
+    });
+    
+    // Set authId to match MongoDB _id for simple 1-to-1 correlation
+    user.authId = user._id.toString();
+    await user.save();
 
-  if (eventType === 'user.deleted') {
-    try {
-      await User.findOneAndDelete({ clerkId: id });
-      return res.status(200).json({ success: true });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Failed to delete user in DB' });
-    }
+    return sendSuccess(res, {
+      success: true,
+      user: {
+        id: user._id.toString(),
+        username: user.username,
+        email: user.email,
+        user_tag: user.user_tag,
+        avatar_url: user.avatar_url
+      }
+    }, 201);
+  } catch (error) {
+    console.error('Registration error:', error);
+    return sendError(res, 'Database Error', 'Failed to create user in database', 'DATABASE_ERROR', 500);
   }
-
-  return res.status(200).json({ success: true });
 });
 
 export default router;

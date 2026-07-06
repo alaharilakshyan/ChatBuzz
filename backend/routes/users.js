@@ -3,62 +3,74 @@ import User from '../models/User.js';
 import Block from '../models/Block.js';
 import Report from '../models/Report.js';
 import FriendRequest from '../models/FriendRequest.js';
-import { clerkClient } from '@clerk/clerk-sdk-node';
+import { validateRequest, rules, sanitizeString, sanitizeUrl } from '../utils/validator.js';
+import { sendSuccess, sendError } from '../utils/response.js';
 
 const router = express.Router();
 
+// Validation Schemas
+const patchMeSchema = {
+  username: { required: false, validate: rules.username },
+  bio: { required: false, validate: rules.string(0, 500) },
+  avatar_url: { required: false, validate: rules.string(0, 2048) },
+  publicKey: { required: false, validate: rules.string(0, 1024) },
+  preferences: { required: false, validate: (val) => typeof val === 'object' }
+};
+
+const blockSchema = {
+  targetUserId: { required: true, validate: rules.objectId }
+};
+
+const reportSchema = {
+  targetUserId: { required: true, validate: rules.objectId },
+  reason: { required: true, validate: rules.string(1, 500) },
+  messageId: { required: false, validate: (val) => val === undefined || rules.objectId(val) }
+};
+
 router.get('/me', async (req, res) => {
   try {
-    let user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) {
-      const clerkUser = await clerkClient.users.getUser(req.auth.userId);
-      const email = clerkUser.emailAddresses[0]?.emailAddress;
-      const displayName = clerkUser.username || clerkUser.firstName || email?.split('@')[0] || 'User';
-      const userTag = Math.floor(1000 + Math.random() * 9000).toString();
-      
-      user = await User.create({
-        clerkId: req.auth.userId,
-        email: email,
-        username: displayName,
-        user_tag: userTag,
-        avatar_url: clerkUser.imageUrl
-      });
-    }
-    res.json(user);
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Not Found', 'User not found', 'USER_NOT_FOUND', 404);
+    return sendSuccess(res, user);
   } catch (error) {
     console.error("Error in /users/me:", error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
-router.patch('/me', async (req, res) => {
+router.patch('/me', validateRequest(patchMeSchema), async (req, res) => {
   try {
     const allowedUpdates = ['username', 'bio', 'avatar_url', 'publicKey', 'preferences'];
     const updates = {};
     for (const key of allowedUpdates) {
       if (req.body[key] !== undefined) {
-        updates[key] = req.body[key];
+        if (key === 'username' || key === 'bio') {
+          updates[key] = sanitizeString(req.body[key]);
+        } else if (key === 'avatar_url') {
+          updates[key] = sanitizeUrl(req.body[key]);
+        } else {
+          updates[key] = req.body[key];
+        }
       }
     }
-    const user = await User.findOneAndUpdate(
-      { clerkId: req.auth.userId },
+    const user = await User.findByIdAndUpdate(
+      req.session.user.id,
       { $set: updates },
       { new: true }
     );
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    if (!user) return sendError(res, 'Not Found', 'User not found', 'USER_NOT_FOUND', 404);
+    return sendSuccess(res, user);
   } catch (error) {
     console.error("Error updating profile:", error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
 router.get('/search', async (req, res) => {
   try {
-    const me = await User.findOne({ clerkId: req.auth.userId });
-    if (!me) return res.status(401).json({ error: 'Unauthorized' });
+    const me = await User.findById(req.session.user.id);
+    if (!me) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
-    // Find users I have blocked or who have blocked me
     const blocks = await Block.find({
       $or: [
         { blocker: me._id },
@@ -70,26 +82,22 @@ router.get('/search', async (req, res) => {
     );
 
     const users = await User.find({
-      clerkId: { $ne: req.auth.userId },
+      _id: { $ne: req.session.user.id },
       _id: { $notin: blockedUserIds }
-    }).select('-clerkId');
-    res.json(users);
+    }).select('-password -authId');
+    return sendSuccess(res, users);
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error("Error searching users:", error);
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
-/**
- * POST /api/users/block
- * Block a user
- */
-router.post('/block', async (req, res) => {
+router.post('/block', validateRequest(blockSchema), async (req, res) => {
   try {
-    const me = await User.findOne({ clerkId: req.auth.userId });
-    if (!me) return res.status(401).json({ error: 'Unauthorized' });
+    const me = await User.findById(req.session.user.id);
+    if (!me) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
     const { targetUserId } = req.body;
-    if (!targetUserId) return res.status(400).json({ error: 'targetUserId is required' });
 
     await Block.findOneAndUpdate(
       { blocker: me._id, blocked: targetUserId },
@@ -97,7 +105,6 @@ router.post('/block', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Delete any friendships or friend requests between these users
     await FriendRequest.deleteMany({
       $or: [
         { requester: me._id, recipient: targetUserId },
@@ -105,85 +112,75 @@ router.post('/block', async (req, res) => {
       ]
     });
 
-    res.json({ success: true, message: 'User blocked' });
+    return sendSuccess(res, { success: true, message: 'User blocked' });
   } catch (error) {
     console.error('Error blocking user:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
-/**
- * POST /api/users/unblock
- * Unblock a user
- */
-router.post('/unblock', async (req, res) => {
+router.post('/unblock', validateRequest(blockSchema), async (req, res) => {
   try {
-    const me = await User.findOne({ clerkId: req.auth.userId });
-    if (!me) return res.status(401).json({ error: 'Unauthorized' });
+    const me = await User.findById(req.session.user.id);
+    if (!me) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
     const { targetUserId } = req.body;
-    if (!targetUserId) return res.status(400).json({ error: 'targetUserId is required' });
 
     await Block.findOneAndDelete({ blocker: me._id, blocked: targetUserId });
 
-    res.json({ success: true, message: 'User unblocked' });
+    return sendSuccess(res, { success: true, message: 'User unblocked' });
   } catch (error) {
     console.error('Error unblocking user:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
-/**
- * POST /api/users/report
- * Report a user
- */
-router.post('/report', async (req, res) => {
+router.post('/report', validateRequest(reportSchema), async (req, res) => {
   try {
-    const me = await User.findOne({ clerkId: req.auth.userId });
-    if (!me) return res.status(401).json({ error: 'Unauthorized' });
+    const me = await User.findById(req.session.user.id);
+    if (!me) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
     const { targetUserId, reason, messageId } = req.body;
-    if (!targetUserId || !reason) {
-      return res.status(400).json({ error: 'targetUserId and reason are required' });
-    }
 
     const report = await Report.create({
       reporter: me._id,
       reported: targetUserId,
-      reason,
+      reason: sanitizeString(reason),
       messageId
     });
 
-    res.status(201).json({ success: true, report });
+    return sendSuccess(res, { success: true, report }, 201);
   } catch (error) {
     console.error('Error reporting user:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
-/**
- * GET /api/users/blocked/list
- * Get list of blocked users
- */
 router.get('/blocked/list', async (req, res) => {
   try {
-    const me = await User.findOne({ clerkId: req.auth.userId });
-    if (!me) return res.status(401).json({ error: 'Unauthorized' });
+    const me = await User.findById(req.session.user.id);
+    if (!me) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
     const blocks = await Block.find({ blocker: me._id }).populate('blocked', 'username avatar_url user_tag');
-    res.json(blocks.map(b => b.blocked));
+    return sendSuccess(res, blocks.map(b => b.blocked));
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error getting blocked list:', error);
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
 router.get('/:id', async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('username avatar_url publicKey user_tag');
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    const targetId = req.params.id;
+    if (!rules.objectId(targetId)) {
+      return sendError(res, 'Validation Error', 'Invalid ObjectId format', 'VALIDATION_ERROR', 400);
+    }
+    const user = await User.findById(targetId).select('username avatar_url publicKey user_tag');
+    if (!user) return sendError(res, 'Not Found', 'User not found', 'USER_NOT_FOUND', 404);
+    return sendSuccess(res, user);
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error getting user profile:', error);
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 

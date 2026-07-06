@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import path from 'path';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import { sendSuccess, sendError } from '../utils/response.js';
 
 const router = express.Router();
 const useCloudinary = Boolean(
@@ -66,14 +67,14 @@ if (useCloudinary) {
 
 router.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
+    return sendError(res, 'Bad Request', 'No file uploaded', 'NO_FILE_UPLOADED', 400);
   }
 
   const fileUrl = useCloudinary
     ? (req.file.secure_url || req.file.path || req.file.url)
     : `${req.protocol}://${req.get('host')}/api/uploads/files/${req.file.filename}`;
 
-  res.json({
+  return sendSuccess(res, {
     url: fileUrl,
     name: req.file.originalname || req.file.filename || 'file',
     size: req.file.size || req.file.bytes || null,
@@ -82,28 +83,30 @@ router.post('/upload', upload.single('file'), (req, res) => {
   });
 });
 
-// Since ClerkExpressRequireAuth protects all of /api/uploads, fetching images would require auth.
-// Wait, the client usually just puts the URL in an <img> tag, which doesn't send auth headers!
-// Let's create an unprotected route for files? Actually, we can just allow GET /files/:filename without auth.
-// BUT this router is mounted with auth in server.js! Let's export an unprotected router just for GET if needed,
-// but for now we'll serve it here. We will need to move the /files/:filename route out of auth in server.js.
 router.get('/files/:filename', async (req, res) => {
   try {
+    const { filename } = req.params;
+    // Expect filename to contain dot extension, can validate string length
+    if (typeof filename !== 'string' || filename.length < 5) {
+      return sendError(res, 'Validation Error', 'Invalid filename format', 'VALIDATION_ERROR', 400);
+    }
+
     const conn = mongoose.connection;
     const gfs = new mongoose.mongo.GridFSBucket(conn.db, {
       bucketName: 'uploads'
     });
     
-    const files = await gfs.find({ filename: req.params.filename }).toArray();
+    const files = await gfs.find({ filename }).toArray();
     if (!files || files.length === 0) {
-      return res.status(404).json({ error: 'File not found' });
+      return sendError(res, 'Not Found', 'File not found', 'FILE_NOT_FOUND', 404);
     }
     
     res.set('Content-Type', files[0].contentType);
-    const readStream = gfs.openDownloadStreamByName(req.params.filename);
-    readStream.pipe(res);
+    const readStream = gfs.openDownloadStreamByName(filename);
+    return readStream.pipe(res);
   } catch (error) {
-    res.status(500).json({ error: 'Error fetching file' });
+    console.error('Error fetching uploaded file:', error);
+    return sendError(res, 'Server Error', 'Error fetching file', 'SERVER_ERROR', 500);
   }
 });
 

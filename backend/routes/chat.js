@@ -1,8 +1,16 @@
 import express from 'express';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
+import FriendRequest from '../models/FriendRequest.js';
+import { validateRequest, rules, sanitizeString, sanitizeUrl } from '../utils/validator.js';
+import { sendSuccess, sendError } from '../utils/response.js';
 
 const router = express.Router();
+
+// Validation schemas
+const reactionSchema = {
+  emoji: { required: true, validate: rules.string(1, 100) }
+};
 
 /**
  * GET /api/chat/:targetId
@@ -10,10 +18,13 @@ const router = express.Router();
  */
 router.get('/:targetId', async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
-    const targetId = req.params.targetId;
+    const { targetId } = req.params;
+    if (!rules.objectId(targetId)) {
+      return sendError(res, 'Validation Error', 'Invalid target ID format', 'VALIDATION_ERROR', 400);
+    }
 
     // Prune expired ephemeral messages on fetch
     await Message.deleteMany({
@@ -33,106 +44,170 @@ router.get('/:targetId', async (req, res) => {
       ]
     }).populate('senderId', 'username avatar_url').sort('createdAt');
 
-    res.json(messages);
+    return sendSuccess(res, messages);
   } catch (error) {
     console.error('Error fetching messages:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
 /**
  * DELETE /api/chat/:messageId
- * Soft-delete a message (mark isDeleted = true). Only sender can delete.
- * Also handles ephemeral message cleanup.
+ * Soft-delete a message. Only sender can delete.
  */
 router.delete('/:messageId', async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
-    const message = await Message.findById(req.params.messageId);
-    if (!message) return res.status(404).json({ error: 'Message not found' });
+    const { messageId } = req.params;
+    if (!rules.objectId(messageId)) {
+      return sendError(res, 'Validation Error', 'Invalid message ID format', 'VALIDATION_ERROR', 400);
+    }
 
-    // Only the sender can delete their own message
+    const message = await Message.findById(messageId);
+    if (!message) return sendError(res, 'Not Found', 'Message not found', 'MESSAGE_NOT_FOUND', 404);
+
     if (message.senderId.toString() !== user._id.toString()) {
-      return res.status(403).json({ error: 'Forbidden: not your message' });
+      return sendError(res, 'Forbidden', 'Not authorized to delete this message', 'FORBIDDEN', 403);
     }
 
     message.isDeleted = true;
     message.content = '';
     await message.save();
 
-    res.json({ success: true, messageId: message._id });
+    return sendSuccess(res, { success: true, messageId: message._id });
   } catch (error) {
     console.error('Error deleting message:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
 /**
- * GET /api/chat/conversations
- * Get conversation previews (last message + unread count) for all friends
+ * GET /api/chat/conversations/list
+ * Optimized: Get conversation previews (last message + unread count) for all friends
+ * Resolves N+1 database queries via MongoDB aggregation pipelines
  */
 router.get('/conversations/list', async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
     // Get all friends
-    const FriendRequest = (await import('../models/FriendRequest.js')).default;
     const friendships = await FriendRequest.find({
       $or: [
         { requester: user._id, status: 'accepted' },
         { recipient: user._id, status: 'accepted' }
       ]
-    }).populate('requester recipient', 'username avatar_url user_tag clerkId');
+    }).populate('requester recipient', 'username avatar_url user_tag authId');
 
     const friendIds = friendships.map(f => {
       const isRequester = f.requester._id.toString() === user._id.toString();
       return isRequester ? f.recipient._id : f.requester._id;
     });
 
-    // Get last message and unread count for each friend
-    const conversations = await Promise.all(
-      friendIds.map(async (friendId) => {
-        const lastMessage = await Message.findOne({
-          $or: [
-            { senderId: user._id, receiverId: friendId },
-            { senderId: friendId, receiverId: user._id }
-          ],
-          isDeleted: { $ne: true }
-        })
-          .populate('senderId', 'username avatar_url')
-          .sort({ createdAt: -1 });
+    if (friendIds.length === 0) {
+      return sendSuccess(res, []);
+    }
 
-        const unreadCount = await Message.countDocuments({
-          senderId: friendId,
+    // 1. Pipeline to get the most recent message for each direct conversation
+    const lastMessages = await Message.aggregate([
+      {
+        $match: {
+          isDeleted: { $ne: true },
+          groupId: { $exists: false },
+          $or: [
+            { senderId: user._id },
+            { receiverId: user._id }
+          ]
+        }
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $eq: ["$senderId", user._id] },
+              "$receiverId",
+              "$senderId"
+            ]
+          },
+          lastMessage: { $first: "$$ROOT" }
+        }
+      }
+    ]);
+
+    // 2. Pipeline to get unread message counts grouped by sender
+    const unreadCounts = await Message.aggregate([
+      {
+        $match: {
           receiverId: user._id,
           isDeleted: { $ne: true },
           readBy: { $ne: user._id }
-        });
+        }
+      },
+      {
+        $group: {
+          _id: "$senderId",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
 
-        const friend = friendships.find(f => {
-          const isRequester = f.requester._id.toString() === user._id.toString();
-          return isRequester ? f.recipient._id.toString() === friendId.toString() : f.requester._id.toString() === friendId.toString();
-        });
+    // Map aggregation results to quick lookup dictionaries
+    const lastMessageMap = {};
+    for (const item of lastMessages) {
+      if (item._id) {
+        lastMessageMap[item._id.toString()] = item.lastMessage;
+      }
+    }
 
-        const friendData = friend ? (friend.requester._id.toString() === user._id.toString() ? friend.recipient : friend.requester) : null;
+    const unreadCountMap = {};
+    for (const item of unreadCounts) {
+      if (item._id) {
+        unreadCountMap[item._id.toString()] = item.count;
+      }
+    }
 
-        return {
-          friendId: friendId.toString(),
-          friend: friendData,
-          lastMessage: lastMessage ? {
-            _id: lastMessage._id,
-            content: lastMessage.content,
-            senderId: lastMessage.senderId._id,
-            sender: lastMessage.senderId,
-            createdAt: lastMessage.createdAt
-          } : null,
-          unreadCount
-        };
-      })
-    );
+    // Combine into final list in memory
+    const conversations = friendIds.map((friendId) => {
+      const friendIdStr = friendId.toString();
+      const lastMessage = lastMessageMap[friendIdStr];
+      const unreadCount = unreadCountMap[friendIdStr] || 0;
+
+      const friend = friendships.find(f => {
+        const isRequester = f.requester._id.toString() === user._id.toString();
+        return isRequester
+          ? f.recipient._id.toString() === friendIdStr
+          : f.requester._id.toString() === friendIdStr;
+      });
+
+      const friendData = friend
+        ? (friend.requester._id.toString() === user._id.toString() ? friend.recipient : friend.requester)
+        : null;
+
+      let populatedSender = null;
+      if (lastMessage) {
+        if (lastMessage.senderId.toString() === user._id.toString()) {
+          populatedSender = { _id: user._id, username: user.username, avatar_url: user.avatar_url };
+        } else {
+          populatedSender = friendData;
+        }
+      }
+
+      return {
+        friendId: friendIdStr,
+        friend: friendData,
+        lastMessage: lastMessage ? {
+          _id: lastMessage._id,
+          content: lastMessage.content,
+          senderId: lastMessage.senderId,
+          sender: populatedSender,
+          createdAt: lastMessage.createdAt
+        } : null,
+        unreadCount
+      };
+    });
 
     // Sort by most recent message
     conversations.sort((a, b) => {
@@ -141,10 +216,10 @@ router.get('/conversations/list', async (req, res) => {
       return new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime();
     });
 
-    res.json(conversations);
+    return sendSuccess(res, conversations);
   } catch (error) {
     console.error('Error fetching conversations:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
@@ -154,27 +229,30 @@ router.get('/conversations/list', async (req, res) => {
  */
 router.post('/:messageId/read', async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
-    const message = await Message.findById(req.params.messageId);
-    if (!message) return res.status(404).json({ error: 'Message not found' });
-
-    // Only the receiver can mark as read
-    if (message.receiverId?.toString() !== user._id.toString()) {
-      return res.status(403).json({ error: 'Forbidden' });
+    const { messageId } = req.params;
+    if (!rules.objectId(messageId)) {
+      return sendError(res, 'Validation Error', 'Invalid message ID format', 'VALIDATION_ERROR', 400);
     }
 
-    // Add user to readBy if not already present
+    const message = await Message.findById(messageId);
+    if (!message) return sendError(res, 'Not Found', 'Message not found', 'MESSAGE_NOT_FOUND', 404);
+
+    if (message.receiverId?.toString() !== user._id.toString()) {
+      return sendError(res, 'Forbidden', 'Forbidden', 'FORBIDDEN', 403);
+    }
+
     if (!message.readBy.includes(user._id)) {
       message.readBy.push(user._id);
       await message.save();
     }
 
-    res.json({ success: true });
+    return sendSuccess(res, { success: true });
   } catch (error) {
     console.error('Error marking message as read:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
@@ -182,29 +260,31 @@ router.post('/:messageId/read', async (req, res) => {
  * POST /api/chat/:messageId/reactions
  * Add or remove a reaction to a message
  */
-router.post('/:messageId/reactions', async (req, res) => {
+router.post('/:messageId/reactions', validateRequest(reactionSchema), async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
+
+    const { messageId } = req.params;
+    if (!rules.objectId(messageId)) {
+      return sendError(res, 'Validation Error', 'Invalid message ID format', 'VALIDATION_ERROR', 400);
+    }
 
     const { emoji } = req.body;
-    if (!emoji) return res.status(400).json({ error: 'Emoji is required' });
+    const sanitizedEmoji = sanitizeString(emoji);
 
-    const message = await Message.findById(req.params.messageId);
-    if (!message) return res.status(404).json({ error: 'Message not found' });
+    const message = await Message.findById(messageId);
+    if (!message) return sendError(res, 'Not Found', 'Message not found', 'MESSAGE_NOT_FOUND', 404);
 
-    // Check if user already reacted with this emoji
     const existingReactionIndex = message.reactions.findIndex(
-      r => r.userId.toString() === user._id.toString() && r.emoji === emoji
+      r => r.userId.toString() === user._id.toString() && r.emoji === sanitizedEmoji
     );
 
     if (existingReactionIndex !== -1) {
-      // Remove reaction if it exists
       message.reactions.splice(existingReactionIndex, 1);
     } else {
-      // Add new reaction
       message.reactions.push({
-        emoji,
+        emoji: sanitizedEmoji,
         userId: user._id,
         username: user.username
       });
@@ -215,10 +295,10 @@ router.post('/:messageId/reactions', async (req, res) => {
     const populatedMessage = await Message.findById(message._id)
       .populate('reactions.userId', 'username avatar_url');
 
-    res.json(populatedMessage);
+    return sendSuccess(res, populatedMessage);
   } catch (error) {
     console.error('Error updating reaction:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
@@ -228,15 +308,20 @@ router.post('/:messageId/reactions', async (req, res) => {
  */
 router.get('/:messageId/reply', async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
-    const message = await Message.findById(req.params.messageId)
+    const { messageId } = req.params;
+    if (!rules.objectId(messageId)) {
+      return sendError(res, 'Validation Error', 'Invalid message ID format', 'VALIDATION_ERROR', 400);
+    }
+
+    const message = await Message.findById(messageId)
       .populate('senderId', 'username avatar_url');
 
-    if (!message) return res.status(404).json({ error: 'Message not found' });
+    if (!message) return sendError(res, 'Not Found', 'Message not found', 'MESSAGE_NOT_FOUND', 404);
 
-    res.json({
+    return sendSuccess(res, {
       _id: message._id,
       content: message.content,
       senderId: message.senderId._id,
@@ -245,7 +330,7 @@ router.get('/:messageId/reply', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching reply context:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
@@ -255,10 +340,13 @@ router.get('/:messageId/reply', async (req, res) => {
  */
 router.get('/:targetId/media', async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
-    const targetId = req.params.targetId;
+    const { targetId } = req.params;
+    if (!rules.objectId(targetId)) {
+      return sendError(res, 'Validation Error', 'Invalid target ID format', 'VALIDATION_ERROR', 400);
+    }
 
     const messages = await Message.find({
       isDeleted: { $ne: true },
@@ -279,10 +367,10 @@ router.get('/:targetId/media', async (req, res) => {
       }))
     );
 
-    res.json(mediaList);
+    return sendSuccess(res, mediaList);
   } catch (error) {
     console.error('Error getting media gallery:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
@@ -292,11 +380,15 @@ router.get('/:targetId/media', async (req, res) => {
  */
 router.get('/search/query', async (req, res) => {
   try {
-    const user = await User.findOne({ clerkId: req.auth.userId });
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
 
     const queryText = req.query.q;
-    if (!queryText) return res.status(400).json({ error: 'Query parameter q is required' });
+    if (!queryText) {
+      return sendError(res, 'Validation Error', 'Query parameter q is required', 'VALIDATION_ERROR', 400);
+    }
+
+    const sanitizedQuery = sanitizeString(queryText);
 
     const messages = await Message.find({
       isDeleted: { $ne: true },
@@ -304,16 +396,16 @@ router.get('/search/query', async (req, res) => {
         { senderId: user._id },
         { receiverId: user._id }
       ],
-      content: { $regex: queryText, $options: 'i' }
+      content: { $regex: sanitizedQuery, $options: 'i' }
     })
       .populate('senderId', 'username avatar_url')
       .populate('receiverId', 'username avatar_url')
       .sort({ createdAt: -1 });
 
-    res.json(messages);
+    return sendSuccess(res, messages);
   } catch (error) {
     console.error('Error querying message search:', error);
-    res.status(500).json({ error: 'Server error' });
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
   }
 });
 
@@ -324,27 +416,33 @@ router.get('/search/query', async (req, res) => {
 router.get('/link-preview/scraper', async (req, res) => {
   try {
     const url = req.query.url;
-    if (!url) return res.status(400).json({ error: 'URL is required' });
+    if (!url) {
+      return sendError(res, 'Validation Error', 'URL is required', 'VALIDATION_ERROR', 400);
+    }
 
-    const response = await fetch(url);
+    const sanitizedUrl = sanitizeUrl(url);
+    if (!sanitizedUrl) {
+      return sendSuccess(res, { title: '', description: '', image: '' });
+    }
+
+    const response = await fetch(sanitizedUrl);
     if (!response.ok) throw new Error('Fetch failed');
 
     const html = await response.text();
 
-    // Naive regex parsing for standard OpenGraph tags
     const titleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
                       html.match(/<title>([^<]+)<\/title>/i);
     const descMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
-                     html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+                      html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
     const imageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
 
-    res.json({
-      title: titleMatch ? titleMatch[1] : '',
-      description: descMatch ? descMatch[1] : '',
-      image: imageMatch ? imageMatch[1] : ''
+    return sendSuccess(res, {
+      title: titleMatch ? sanitizeString(titleMatch[1]) : '',
+      description: descMatch ? sanitizeString(descMatch[1]) : '',
+      image: imageMatch ? sanitizeUrl(imageMatch[1]) : ''
     });
   } catch (error) {
-    res.json({ title: '', description: '', image: '' }); // Fail gracefully
+    return sendSuccess(res, { title: '', description: '', image: '' }); // Fail gracefully
   }
 });
 

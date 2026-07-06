@@ -9,7 +9,7 @@ import { Search, UserPlus, Loader2, CheckCircle, Clock, Users } from 'lucide-rea
 
 interface SearchResult {
   _id: string;
-  clerkId: string;
+  authId?: string;
   username: string;
   user_tag: string;
   avatar_url: string | null;
@@ -49,7 +49,7 @@ export const UserSearch = () => {
         : [searchQuery, ''];
 
       const filtered = data.filter((p) => {
-        if (p.clerkId === user.id) return false;
+        if (p._id === user.id) return false;
         const nameMatch = p.username.toLowerCase().includes(usernameSearch.toLowerCase());
         const tagMatch = tagSearch ? p.user_tag === tagSearch : true;
         return nameMatch && tagMatch;
@@ -87,7 +87,7 @@ export const UserSearch = () => {
         else if (s?.status === 'pending' && s?.direction === 'received') friendStatus = 'pending_received';
         return {
           _id: p._id,
-          clerkId: p.clerkId,
+          authId: p.authId,
           username: p.username,
           user_tag: p.user_tag,
           avatar_url: p.avatar_url,

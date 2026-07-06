@@ -3,16 +3,14 @@ import { Navigate, Link } from 'react-router-dom';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUser } from '@clerk/clerk-react';
+
 import { MessageCircle, Sparkles, Home } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Login = () => {
-  const { user } = useAuth();
-  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
-  // Redirect to /chat only after Clerk has initialized and there's either
-  // a backend user or a Clerk session (prevents bouncing while profile loads).
-  if (clerkLoaded && (user || clerkUser)) return <Navigate to="/chat" replace />;
+  const { user, loading } = useAuth();
+  
+  if (!loading && user) return <Navigate to="/chat" replace />;
 
   return (
     <div className="min-h-screen flex w-full relative overflow-hidden bg-white dark:bg-slate-950 transition-colors duration-300">

@@ -3,16 +3,14 @@ import { Navigate, Link } from 'react-router-dom';
 import { RegisterForm } from '@/components/auth/RegisterForm';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUser } from '@clerk/clerk-react';
+
 import { MessageCircle, Sparkles, Home } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Register = () => {
-  const { user } = useAuth();
-  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
-  // Avoid redirect until Clerk has finished initializing; allow redirect if
-  // Clerk shows a signed-in user even if backend profile is still pending.
-  if (clerkLoaded && (user || clerkUser)) return <Navigate to="/chat" replace />;
+  const { user, loading } = useAuth();
+  
+  if (!loading && user) return <Navigate to="/chat" replace />;
 
   return (
     <div className="min-h-screen flex w-full relative overflow-hidden bg-white dark:bg-slate-950 transition-colors duration-300">

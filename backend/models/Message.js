@@ -24,7 +24,7 @@ const MessageSchema = new mongoose.Schema({
   expiresAt: { type: Date },
   isDeleted: { type: Boolean, default: false },
   isOneTimeView: { type: Boolean, default: false },
-  viewedBy: [{ type: String }],
+  viewedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Track which users have read the message
   reactions: [ReactionSchema], // Store reactions with user info
   replyTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' } // Reference to original message for replies

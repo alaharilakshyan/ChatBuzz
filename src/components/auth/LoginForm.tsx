@@ -1,32 +1,135 @@
-import React from 'react';
-import { SignIn } from '@clerk/clerk-react';
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Loader2, Lock, Mail, ArrowRight } from 'lucide-react';
 
 export const LoginForm = () => {
+  const { login } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter both email and password',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await login(email, password);
+      toast({
+        title: 'Welcome Back!',
+        description: 'Successfully signed in.',
+      });
+      navigate('/chat');
+    } catch (err: any) {
+      toast({
+        title: 'Authentication Failed',
+        description: err.message || 'Invalid email or password',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="w-full flex justify-center bg-transparent">
-      <SignIn 
-        routing="path"
-        path="/login"
-        signUpUrl="/register"
-        fallbackRedirectUrl="/chat"
-        appearance={{
-          elements: {
-            rootBox: "w-full",
-            card: "bg-white dark:bg-slate-900 shadow-xl rounded-2xl border border-gray-200 dark:border-slate-800",
-            headerTitle: "text-black dark:text-white",
-            headerSubtitle: "text-gray-500 dark:text-gray-400",
-            formFieldLabel: "text-black dark:text-white",
-            formFieldInput: "bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-700 text-black dark:text-white rounded-xl h-11",
-            formButtonPrimary: "bg-black dark:bg-[#4ADE80] text-white dark:text-black hover:bg-black/90 dark:hover:bg-[#22C55E] h-11 rounded-xl font-bold",
-            footerActionLink: "text-[#9AC68A] dark:text-[#4ADE80] hover:text-[#8AB67A] dark:hover:text-[#22C55E]",
-            dividerLine: "bg-gray-200 dark:bg-slate-800",
-            dividerText: "text-gray-500 dark:text-gray-400",
-            socialButtonsBlockButton: "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 text-black dark:text-white rounded-xl h-11",
-            socialButtonsBlockButtonText: "font-semibold",
-            branding: "hidden",
-          }
-        }}
-      />
-    </div>
+    <Card className="w-full max-w-[420px] mx-auto rounded-[24px] border-zinc-200 dark:border-slate-800 shadow-2xl bg-white/90 dark:bg-slate-900/90 overflow-hidden backdrop-blur-xl transition-all duration-300">
+      <CardHeader className="space-y-2 pb-4 pt-6">
+        <CardTitle className="text-3xl font-extrabold text-center tracking-tight bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
+          Sign In
+        </CardTitle>
+        <CardDescription className="text-center text-zinc-500 dark:text-zinc-400 text-[14px]">
+          Enter your email and password to access your chats
+        </CardDescription>
+      </CardHeader>
+      
+      <form onSubmit={handleSubmit}>
+        <CardContent className="px-8 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-zinc-700 dark:text-zinc-300 font-semibold text-[14px]">
+              Email Address
+            </Label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-3.5 h-5 w-5 text-zinc-400" />
+              <Input
+                id="email"
+                type="email"
+                placeholder="name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+                required
+                className="h-12 pl-11 rounded-xl bg-zinc-50 dark:bg-[#1C1C1E] border-zinc-200 dark:border-[#2C2C2E] text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500 text-[15px]"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <Label htmlFor="password" className="text-zinc-700 dark:text-zinc-300 font-semibold text-[14px]">
+                Password
+              </Label>
+              <Link to="/forgot-password" className="text-[12px] text-emerald-600 dark:text-emerald-400 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-3.5 h-5 w-5 text-zinc-400" />
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+                required
+                className="h-12 pl-11 rounded-xl bg-zinc-50 dark:bg-[#1C1C1E] border-zinc-200 dark:border-[#2C2C2E] text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500 text-[15px]"
+              />
+            </div>
+          </div>
+        </CardContent>
+
+        <CardFooter className="flex flex-col space-y-4 px-8 pb-8 pt-4">
+          <Button
+            type="submit"
+            className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold text-[16px] border-0 transition-all duration-200 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-600/35"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Signing In...
+              </>
+            ) : (
+              <span className="flex items-center justify-center">
+                Sign In <ArrowRight className="ml-2 h-5 w-5" />
+              </span>
+            )}
+          </Button>
+
+          <p className="text-[14px] text-center text-zinc-500 dark:text-zinc-400">
+            Don't have an account?{' '}
+            <Link to="/register" className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
+              Create account
+            </Link>
+          </p>
+        </CardFooter>
+      </form>
+    </Card>
   );
 };

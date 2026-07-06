@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import { useUser } from '@clerk/clerk-react';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -28,26 +27,18 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   
-  const { user, getToken } = useAuth();
-  const { user: clerkUser } = useUser();
+  const { user } = useAuth();
 
   useEffect(() => {
     let cleanupSocket: (() => void) | null = null;
 
     const initSocket = async () => {
-      // Allow socket to initialize when Clerk session exists even if our
-      // backend `user` object hasn't been fully populated yet.
-      const effectiveUser = user || (clerkUser ? { id: clerkUser.id } : null);
-      if (!effectiveUser) return;
-
-      const token = await getToken();
-      if (!token) return;
+      if (!user) return;
 
       const rawUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       const backendUrl = rawUrl.endsWith('/api') ? rawUrl.replace(/\/api$/, '') : rawUrl;
 
       const newSocket = io(backendUrl, {
-        auth: { token },
         withCredentials: true,
         transports: ['websocket', 'polling']
       });
@@ -56,7 +47,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       newSocket.on('connect', () => {
         setIsConnected(true);
-        newSocket.emit('user_online', effectiveUser.id);
+        newSocket.emit('user_online', user.id);
       });
 
       newSocket.on('disconnect', () => {
@@ -81,7 +72,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       cleanupSocket?.();
     };
-  }, [user, getToken, clerkUser]);
+  }, [user]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected, onlineUsers }}>

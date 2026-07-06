@@ -127,7 +127,7 @@ export const ChatInterface = () => {
   const normalizeMessage = (msg: any): Message => {
     const sender = typeof msg?.senderId === 'object' && msg.senderId !== null ? msg.senderId : null;
     const senderId = typeof msg?.senderId === 'object' && msg.senderId !== null
-      ? (msg.senderId._id || msg.senderId.clerkId || msg.senderId.id || '')
+      ? (msg.senderId._id || msg.senderId.id || '')
       : (msg?.senderId || '');
     const createdAt = msg?.createdAt || msg?.created_at || new Date().toISOString();
     const viewedBy = Array.isArray(msg?.viewedBy)

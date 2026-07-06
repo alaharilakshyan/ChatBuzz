@@ -50,10 +50,10 @@ const ResetPassword = () => {
 
     setLoading(true);
 
-    // TODO: Implement Clerk reset password logic here if using custom flow
+    // TODO: Implement custom reset password logic here if needed
     toast({
       title: "Notice",
-      description: "Password reset is handled by Clerk via the main login screen.",
+      description: "Password reset is currently disabled. Please contact the administrator.",
     });
     navigate('/login');
 

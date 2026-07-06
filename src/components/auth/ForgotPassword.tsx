@@ -31,7 +31,7 @@ export const ForgotPassword = () => {
 
     toast({
       title: "Notice",
-      description: "Password reset is handled by Clerk via the main login screen.",
+      description: "Password reset is currently disabled. Please contact the administrator.",
     });
     navigate('/login');
 

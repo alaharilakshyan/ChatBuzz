@@ -10,7 +10,6 @@ interface FriendRequest {
   _id: string;
   requester: {
     _id: string;
-    clerkId: string;
     username: string;
     user_tag: string;
     avatar_url: string | null;

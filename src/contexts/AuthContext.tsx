@@ -99,6 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = async () => {
     try {
       const sessionRes = await window.fetch(`${VITE_API_URL}/auth/session`, {
+        credentials: 'include',
         headers: {
           'Accept': 'application/json'
         }
@@ -125,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Fetch profile from our backend /users/me using the cookie session
       const meRes = await window.fetch(`${VITE_API_URL}/users/me`, {
+        credentials: 'include',
         headers: {
           'Accept': 'application/json'
         }
@@ -182,6 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // 1. Fetch CSRF token
       const csrfRes = await window.fetch(`${VITE_API_URL}/auth/csrf`, {
+        credentials: 'include',
         headers: {
           'Accept': 'application/json'
         }
@@ -199,8 +202,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { csrfToken } = csrfData;
 
       // 2. Submit credentials
+      // Prevent fetch from following redirects so we can inspect the auth response
       const loginRes = await window.fetch(`${VITE_API_URL}/auth/callback/credentials`, {
         method: 'POST',
+        credentials: 'include',
+        redirect: 'manual',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json'
@@ -214,21 +220,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         })
       });
 
-      if (!loginRes.ok) {
-        throw new Error('Invalid email or password');
-      }
-
-      const loginText = await loginRes.text();
-      let responseData;
-      try {
-        responseData = JSON.parse(loginText);
-      } catch (err) {
-        console.error('Failed to parse login response as JSON. Response text:', loginText);
-        throw err;
-      }
-
-      if (responseData.url && responseData.url.includes('error=')) {
-        throw new Error('Invalid credentials');
+      if (loginRes.status === 302) {
+        const location = loginRes.headers.get('location') || '';
+        if (location.includes('error=') || location.includes('/signin')) {
+          throw new Error('Invalid email or password');
+        }
+      } else if (!loginRes.ok) {
+        const loginText = await loginRes.text();
+        let loginData;
+        try {
+          loginData = JSON.parse(loginText);
+        } catch {
+          loginData = null;
+        }
+        throw new Error(loginData?.error || loginData?.message || 'Invalid email or password');
+      } else {
+        const loginText = await loginRes.text();
+        if (loginText) {
+          let loginData;
+          try {
+            loginData = JSON.parse(loginText);
+          } catch (err) {
+            console.error('Failed to parse login response as JSON. Response text:', loginText);
+          }
+          if (loginData?.error || loginData?.status >= 400) {
+            throw new Error(loginData?.error || 'Invalid email or password');
+          }
+        }
       }
 
       await fetchProfile();
@@ -244,6 +262,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await window.fetch(`${VITE_API_URL}/auth/register`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -260,7 +279,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error('Failed to parse registration error as JSON. Response text:', errText);
           throw err;
         }
-        throw new Error(data.error || 'Registration failed');
+        throw new Error(data.message || data.error || 'Registration failed');
       }
 
       // Automatically log in after registration
@@ -276,6 +295,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const csrfRes = await window.fetch(`${VITE_API_URL}/auth/csrf`, {
+        credentials: 'include',
         headers: {
           'Accept': 'application/json'
         }

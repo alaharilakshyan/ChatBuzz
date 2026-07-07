@@ -106,6 +106,49 @@ app.use(cors({
 app.use(express.json());
 // Parse URL-encoded bodies sent by Auth.js credential form posts
 app.use(express.urlencoded({ extended: true }));
+// Debug middleware: log request details for all /api/auth/* routes before Auth.js runs
+app.use('/api/auth/*', (req, res, next) => {
+  try {
+    console.log('[AuthDebug] ==> incoming request', {
+      method: req.method,
+      path: req.originalUrl,
+      headers: {
+        accept: req.headers.accept,
+        contentType: req.headers['content-type'],
+        cookie: req.headers.cookie,
+        xRequestedWith: req.headers['x-requested-with']
+      },
+      bodyPreview: (() => {
+        try {
+          if (!req.body) return '<no-body-parsed>';
+          const clone = JSON.parse(JSON.stringify(req.body));
+          // avoid dumping large fields
+          Object.keys(clone).forEach(k => { if (typeof clone[k] === 'string' && clone[k].length>200) clone[k] = clone[k].slice(0,200)+'...[truncated]'; });
+          return clone;
+        } catch (e) {
+          return '<body-serialize-failed>';
+        }
+      })()
+    });
+  } catch (e) {
+    console.error('[AuthDebug] failed to log request', e);
+  }
+
+  // Log response headers when the response finishes
+  res.on('finish', () => {
+    try {
+      console.log('[AuthDebug] <== response finished', {
+        path: req.originalUrl,
+        status: res.statusCode,
+        headers: res.getHeaders()
+      });
+    } catch (e) {
+      console.error('[AuthDebug] failed to log response', e);
+    }
+  });
+
+  next();
+});
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', env: process.env.NODE_ENV || 'development', mongodb: mongoose.connection.readyState });

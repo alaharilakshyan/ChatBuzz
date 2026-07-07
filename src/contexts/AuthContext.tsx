@@ -1,31 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authService } from '@/services/auth.service';
+import { userService } from '@/services/user.service';
+import { setRefreshPromise } from '@/api/apiClient';
 
-// Intercept window.fetch to automatically include credentials (cookies) for our backend API
-const VITE_API_URL = import.meta.env.VITE_API_URL || '/api';
-const originalFetch = window.fetch;
-window.fetch = function (input, init) {
-  const urlStr = typeof input === 'string' ? input : (input instanceof Request ? input.url : '');
-  if (urlStr.startsWith(VITE_API_URL) || urlStr.includes('/api/')) {
-    init = init || {};
-    init.credentials = 'include';
-    
-    // Inject custom header to prevent CSRF
-    init.headers = init.headers || {};
-    if (init.headers instanceof Headers) {
-      init.headers.set('X-Requested-With', 'XMLHttpRequest');
-    } else if (Array.isArray(init.headers)) {
-      const hasHeader = init.headers.some(h => h[0].toLowerCase() === 'x-requested-with');
-      if (!hasHeader) {
-        init.headers.push(['X-Requested-With', 'XMLHttpRequest']);
-      }
-    } else {
-      init.headers['X-Requested-With'] = 'XMLHttpRequest';
-    }
-  }
-  return originalFetch.apply(this, [input, init]);
-};
-
-interface Profile {
+export interface Profile {
   id: string;
   username: string;
   user_tag: string;
@@ -40,7 +18,7 @@ interface Profile {
   };
 }
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   email: string;
   username: string;
@@ -58,16 +36,22 @@ interface AuthUser {
   };
 }
 
-interface AuthSession {
+export interface AuthSession {
   user: {
     id: string;
     name?: string | null;
     email?: string | null;
     image?: string | null;
+    username?: string | null;
+    user_tag?: string | null;
+    avatar_url?: string | null;
+    bio?: string | null;
+    publicKey?: string | null;
+    preferences?: any;
   };
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   user: AuthUser | null;
   session: AuthSession | null;
   profile: Profile | null;
@@ -80,15 +64,10 @@ interface AuthContextType {
   getToken: () => Promise<string | null>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+// Track if a refresh request is already pending to avoid multiple identical requests (Token Refresh Guard)
+let activeRefreshPromise: Promise<void> | null = null;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -96,160 +75,101 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<AuthSession | null>(null);
 
-  const fetchProfile = async () => {
-    try {
-      const sessionRes = await window.fetch(`${VITE_API_URL}/auth/session`, {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      if (!sessionRes.ok) throw new Error('Failed to fetch Auth.js session');
-      
-      const sessionText = await sessionRes.text();
-      let sessionData;
-      try {
-        sessionData = JSON.parse(sessionText);
-      } catch (err) {
-        console.error('Failed to parse session as JSON. Response text:', sessionText);
-        throw err;
-      }
+  const refreshSession = async () => {
+    if (activeRefreshPromise) {
+      return activeRefreshPromise;
+    }
 
-      if (!sessionData || !sessionData.user) {
+    activeRefreshPromise = (async () => {
+      try {
+        const sessionData = await authService.getSession();
+        
+        if (!sessionData || !sessionData.user) {
+          setUser(null);
+          setProfile(null);
+          setSession(null);
+          return;
+        }
+
+        setSession(sessionData);
+
+        // OPTIMIZATION: If the session payload already contains user profile details,
+        // we can populate everything in a single request. If not, fallback to calling me.
+        const sUser = sessionData.user;
+        if (sUser.username && sUser.user_tag) {
+          const p: Profile = {
+            id: sUser.id,
+            username: sUser.username,
+            user_tag: sUser.user_tag,
+            avatar_url: sUser.avatar_url || null,
+            bio: sUser.bio || null,
+            preferences: sUser.preferences
+          };
+          setProfile(p);
+          setUser({
+            id: sUser.id,
+            email: sUser.email || '',
+            username: sUser.username,
+            user_tag: sUser.user_tag,
+            avatar_url: sUser.avatar_url || null,
+            avatar: sUser.avatar_url || null,
+            bio: sUser.bio || null,
+            publicKey: sUser.publicKey || null,
+            preferences: sUser.preferences
+          });
+        } else {
+          // Fallback to fetch profile via API
+          const data = await userService.getProfile();
+          const p: Profile = {
+            id: data._id,
+            username: data.username,
+            user_tag: data.user_tag,
+            avatar_url: data.avatar_url,
+            bio: data.bio,
+            preferences: data.preferences
+          };
+          setProfile(p);
+          setUser({
+            id: data._id,
+            email: data.email,
+            username: data.username,
+            user_tag: data.user_tag,
+            avatar_url: data.avatar_url,
+            avatar: data.avatar_url,
+            bio: data.bio,
+            publicKey: data.publicKey,
+            preferences: data.preferences
+          });
+        }
+      } catch (error) {
+        console.error('Error refreshing session:', error);
         setUser(null);
         setProfile(null);
         setSession(null);
-        return;
+      } finally {
+        activeRefreshPromise = null;
+        setRefreshPromise(null);
       }
+    })();
 
-      setSession(sessionData);
-
-      // Fetch profile from our backend /users/me using the cookie session
-      const meRes = await window.fetch(`${VITE_API_URL}/users/me`, {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      if (meRes.ok) {
-        const meText = await meRes.text();
-        let data;
-        try {
-          data = JSON.parse(meText);
-        } catch (err) {
-          console.error('Failed to parse /users/me as JSON. Response text:', meText);
-          throw err;
-        }
-
-        const p: Profile = {
-          id: data._id,
-          username: data.username,
-          user_tag: data.user_tag,
-          avatar_url: data.avatar_url,
-          bio: data.bio,
-          preferences: data.preferences
-        };
-        setProfile(p);
-        setUser({
-          id: data._id,
-          email: data.email,
-          username: data.username,
-          user_tag: data.user_tag,
-          avatar_url: data.avatar_url,
-          avatar: data.avatar_url,
-          bio: data.bio,
-          publicKey: data.publicKey,
-          preferences: data.preferences
-        });
-      } else {
-        console.warn('/users/me returned non-OK status:', meRes.status);
-        setUser(null);
-        setProfile(null);
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      setUser(null);
-      setProfile(null);
-    } finally {
-      setLoading(false);
-    }
+    setRefreshPromise(activeRefreshPromise);
+    return activeRefreshPromise;
   };
 
   useEffect(() => {
-    fetchProfile();
+    const init = async () => {
+      setLoading(true);
+      await refreshSession();
+      setLoading(false);
+    };
+    init();
   }, []);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      // 1. Fetch CSRF token
-      const csrfRes = await window.fetch(`${VITE_API_URL}/auth/csrf`, {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      if (!csrfRes.ok) throw new Error('Failed to fetch CSRF token');
-      
-      const csrfText = await csrfRes.text();
-      let csrfData;
-      try {
-        csrfData = JSON.parse(csrfText);
-      } catch (err) {
-        console.error('Failed to parse CSRF as JSON. Response text:', csrfText);
-        throw err;
-      }
-      const { csrfToken } = csrfData;
-
-      // 2. Submit credentials
-      // Prevent fetch from following redirects so we can inspect the auth response
-      const loginRes = await window.fetch(`${VITE_API_URL}/auth/callback/credentials`, {
-        method: 'POST',
-        credentials: 'include',
-        redirect: 'manual',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
-        },
-        body: new URLSearchParams({
-          email,
-          password,
-          csrfToken,
-          redirect: 'false',
-          json: 'true'
-        })
-      });
-
-      if (loginRes.status === 302) {
-        const location = loginRes.headers.get('location') || '';
-        if (location.includes('error=') || location.includes('/signin')) {
-          throw new Error('Invalid email or password');
-        }
-      } else if (!loginRes.ok) {
-        const loginText = await loginRes.text();
-        let loginData;
-        try {
-          loginData = JSON.parse(loginText);
-        } catch {
-          loginData = null;
-        }
-        throw new Error(loginData?.error || loginData?.message || 'Invalid email or password');
-      } else {
-        const loginText = await loginRes.text();
-        if (loginText) {
-          let loginData;
-          try {
-            loginData = JSON.parse(loginText);
-          } catch (err) {
-            console.error('Failed to parse login response as JSON. Response text:', loginText);
-          }
-          if (loginData?.error || loginData?.status >= 400) {
-            throw new Error(loginData?.error || 'Invalid email or password');
-          }
-        }
-      }
-
-      await fetchProfile();
+      await authService.login(email, password);
+      await refreshSession();
     } catch (err) {
       console.error('Login error:', err);
       setLoading(false);
@@ -260,71 +180,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (username: string, email: string, password: string) => {
     setLoading(true);
     try {
-      const res = await window.fetch(`${VITE_API_URL}/auth/register`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ username, email, password })
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        let data;
-        try {
-          data = JSON.parse(errText);
-        } catch (err) {
-          console.error('Failed to parse registration error as JSON. Response text:', errText);
-          throw err;
-        }
-        throw new Error(data.message || data.error || 'Registration failed');
-      }
-
-      // Automatically log in after registration
-      await login(email, password);
+      await authService.register(username, email, password);
+      // Register does NOT auto-login, caller handles redirecting to login page.
     } catch (err) {
       console.error('Registration error:', err);
-      setLoading(false);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = async () => {
     setLoading(true);
     try {
-      const csrfRes = await window.fetch(`${VITE_API_URL}/auth/csrf`, {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      if (!csrfRes.ok) throw new Error('Failed to fetch CSRF token for signout');
-      
-      const csrfText = await csrfRes.text();
-      let csrfToken;
-      try {
-        const csrfData = JSON.parse(csrfText);
-        csrfToken = csrfData.csrfToken;
-      } catch (err) {
-        console.error('Failed to parse signout CSRF as JSON. Response text:', csrfText);
-        throw err;
-      }
-
-      await window.fetch(`${VITE_API_URL}/auth/signout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
-        },
-        body: new URLSearchParams({
-          csrfToken,
-          redirect: 'false',
-          json: 'true'
-        })
-      });
-
+      await authService.logout();
       setUser(null);
       setProfile(null);
       setSession(null);
@@ -337,16 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProfile = async (updates: Partial<Profile>) => {
     try {
-      const res = await window.fetch(`${VITE_API_URL}/users/me`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updates)
-      });
-      if (!res.ok) throw new Error('Failed to update profile');
-      const data = await res.json();
-      
+      const data = await userService.updateProfile(updates);
       const p: Profile = {
         id: data._id,
         username: data.username,
@@ -369,16 +229,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         preferences: data.preferences
       });
     } catch (err) {
-      console.error("Failed to update profile", err);
+      console.error('Failed to update profile:', err);
       throw err;
     }
   };
 
   const deleteAccount = async () => {
-    // Implement delete logic if needed
+    // Optional account deletion placeholder
   };
 
-  // Retain dummy getToken for backward-compatibility with other fetch headers
   const getToken = async () => {
     return 'session-auth';
   };
@@ -400,3 +259,5 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
+
+export { useAuth } from '@/hooks/useAuth';

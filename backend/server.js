@@ -13,6 +13,8 @@ import { decode } from '@auth/core/jwt';
 import { authConfig } from './auth.config.js';
 import User from './models/User.js';
 import { logger } from './utils/logger.js';
+import { config } from './utils/config.js';
+import { sendError } from './utils/response.js';
 
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
@@ -33,12 +35,12 @@ app.use(helmet());
 app.use(compression());
 
 // Configurable Rate Limiters
-const globalWindowMs = parseInt(process.env.RATE_LIMIT_GLOBAL_WINDOW_MS) || 15 * 60 * 1000;
-const globalMax = parseInt(process.env.RATE_LIMIT_GLOBAL_MAX) || 100;
-const authWindowMs = parseInt(process.env.RATE_LIMIT_AUTH_WINDOW_MS) || 15 * 60 * 1000;
-const authMax = parseInt(process.env.RATE_LIMIT_AUTH_MAX) || 15;
-const uploadWindowMs = parseInt(process.env.RATE_LIMIT_UPLOADS_WINDOW_MS) || 15 * 60 * 1000;
-const uploadMax = parseInt(process.env.RATE_LIMIT_UPLOADS_MAX) || 10;
+const globalWindowMs = config.rateLimits.globalWindowMs;
+const globalMax = config.rateLimits.globalMax;
+const authWindowMs = config.rateLimits.authWindowMs;
+const authMax = config.rateLimits.authMax;
+const uploadWindowMs = config.rateLimits.uploadWindowMs;
+const uploadMax = config.rateLimits.uploadMax;
 
 const globalLimiter = rateLimit({
   windowMs: globalWindowMs,
@@ -95,7 +97,7 @@ app.use(cors({
   origin: function (origin, callback) {
     // allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.indexOf(origin) !== -1 || process.env.CLIENT_ORIGIN === origin) {
+    if (ALLOWED_ORIGINS.indexOf(origin) !== -1 || config.clientOrigin === origin) {
       return callback(null, true);
     } else {
       return callback(new Error('Not allowed by CORS'), false);
@@ -106,45 +108,28 @@ app.use(cors({
 app.use(express.json());
 // Parse URL-encoded bodies sent by Auth.js credential form posts
 app.use(express.urlencoded({ extended: true }));
-// Debug middleware: log request details for all /api/auth/* routes before Auth.js runs
-app.use('/api/auth/*', (req, res, next) => {
-  try {
-    console.log('[AuthDebug] ==> incoming request', {
-      method: req.method,
-      path: req.originalUrl,
-      headers: {
-        accept: req.headers.accept,
-        contentType: req.headers['content-type'],
-        cookie: req.headers.cookie,
-        xRequestedWith: req.headers['x-requested-with']
-      },
-      bodyPreview: (() => {
-        try {
-          if (!req.body) return '<no-body-parsed>';
-          const clone = JSON.parse(JSON.stringify(req.body));
-          // avoid dumping large fields
-          Object.keys(clone).forEach(k => { if (typeof clone[k] === 'string' && clone[k].length>200) clone[k] = clone[k].slice(0,200)+'...[truncated]'; });
-          return clone;
-        } catch (e) {
-          return '<body-serialize-failed>';
-        }
-      })()
-    });
-  } catch (e) {
-    console.error('[AuthDebug] failed to log request', e);
-  }
 
-  // Log response headers when the response finishes
+// Structured logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  const requestId = Math.random().toString(36).substring(2, 11);
+  req.requestId = requestId;
+
   res.on('finish', () => {
-    try {
-      console.log('[AuthDebug] <== response finished', {
-        path: req.originalUrl,
-        status: res.statusCode,
-        headers: res.getHeaders()
-      });
-    } catch (e) {
-      console.error('[AuthDebug] failed to log response', e);
-    }
+    const duration = Date.now() - start;
+    const userId = req.session?.user?.id || null;
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    logger.info(`Request completed: ${req.method} ${req.originalUrl}`, {
+      timestamp: new Date().toISOString(),
+      requestId,
+      userId,
+      ip,
+      endpoint: req.originalUrl,
+      status: res.statusCode,
+      duration,
+      method: req.method
+    });
   });
 
   next();
@@ -158,13 +143,13 @@ export async function requireAuth(req, res, next) {
   try {
     const session = await getSession(req, authConfig);
     if (!session || !session.user) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return sendError(res, 'Unauthorized', 'You must be logged in to access this resource', 'UNAUTHORIZED', 401);
     }
     req.session = session;
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
-    return res.status(401).json({ error: 'Unauthorized' });
+    logger.error('Auth middleware error', error);
+    return sendError(res, 'Unauthorized', 'You must be logged in to access this resource', 'UNAUTHORIZED', 401);
   }
 }
 
@@ -177,8 +162,8 @@ export function csrfCheck(req, res, next) {
     }
     const hasHeader = req.headers['x-requested-with'] === 'XMLHttpRequest';
     if (!hasHeader) {
-      console.warn(`CSRF attempt blocked: ${req.method} ${req.originalUrl} from origin ${req.headers.origin}`);
-      return res.status(403).json({ error: 'CSRF validation failed' });
+      logger.warn(`CSRF attempt blocked: ${req.method} ${req.originalUrl} from origin ${req.headers.origin}`);
+      return sendError(res, 'Forbidden', 'CSRF validation failed. Missing X-Requested-With header.', 'CSRF_FAILED', 403);
     }
   }
   next();
@@ -275,8 +260,8 @@ import setupSockets from './sockets/index.js';
 setupSockets(io);
 
 // Database Connection
-const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/talk-time';
+const PORT = config.port;
+const MONGODB_URI = config.mongodbUri;
 
 function maskMongoUri(uri) {
   try {
@@ -294,13 +279,9 @@ function maskMongoUri(uri) {
   }
 }
 
-if (!process.env.MONGODB_URI) {
-  logger.warn('MONGODB_URI not set; using fallback to local MongoDB at mongodb://127.0.0.1:27017/talk-time');
-} else {
-  logger.info(`MONGODB_URI present (masked): ${maskMongoUri(process.env.MONGODB_URI)}`);
-  if (process.env.MONGODB_URI.startsWith('mongodb+srv://')) {
-    logger.info('Using SRV connection string (mongodb+srv). Ensure DNS SRV records are reachable from your host and Atlas cluster name is correct.');
-  }
+logger.info(`MONGODB_URI present (masked): ${maskMongoUri(config.mongodbUri)}`);
+if (config.mongodbUri.startsWith('mongodb+srv://')) {
+  logger.info('Using SRV connection string (mongodb+srv). Ensure DNS SRV records are reachable from your host and Atlas cluster name is correct.');
 }
 
 mongoose.connect(MONGODB_URI)

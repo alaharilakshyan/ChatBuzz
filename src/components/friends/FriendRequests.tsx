@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useSocket } from '@/contexts/SocketContext';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Check, X, Loader2, Users } from 'lucide-react';
+import { friendService } from '@/services/friend.service';
 
 interface FriendRequest {
   _id: string;
@@ -23,31 +23,22 @@ interface FriendRequestsProps {
 }
 
 export const FriendRequests: React.FC<FriendRequestsProps> = ({ onRequestHandled }) => {
-  const { getToken } = useAuth();
   const { socket } = useSocket();
   const { toast } = useToast();
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
   const fetchRequests = useCallback(async () => {
     setLoading(true);
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/friends/requests`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setRequests(data);
-      }
+      const data = await friendService.getFriendRequests();
+      setRequests(data);
     } catch (err) {
       console.error('Failed to fetch friend requests:', err);
     }
     setLoading(false);
-  }, [getToken, API_URL]);
+  }, []);
 
   useEffect(() => {
     fetchRequests();
@@ -64,14 +55,7 @@ export const FriendRequests: React.FC<FriendRequestsProps> = ({ onRequestHandled
   const handleAccept = async (request: FriendRequest) => {
     setProcessingId(request._id);
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/friends/request/${request._id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status: 'accepted' })
-      });
-
-      if (!res.ok) throw new Error('Failed to accept request');
+      await friendService.respondFriendRequest(request._id, 'accepted');
 
       // Notify requester via socket
       if (socket) {
@@ -85,7 +69,7 @@ export const FriendRequests: React.FC<FriendRequestsProps> = ({ onRequestHandled
       toast({ title: '🎉 Friend added!', description: `You and ${request.requester.username} are now friends.` });
       onRequestHandled?.();
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: err.message || 'Failed to accept request', variant: 'destructive' });
     }
     setProcessingId(null);
   };
@@ -93,19 +77,12 @@ export const FriendRequests: React.FC<FriendRequestsProps> = ({ onRequestHandled
   const handleReject = async (request: FriendRequest) => {
     setProcessingId(request._id);
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/friends/request/${request._id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status: 'rejected' })
-      });
-
-      if (!res.ok) throw new Error('Failed to reject request');
+      await friendService.respondFriendRequest(request._id, 'rejected');
 
       setRequests(prev => prev.filter(r => r._id !== request._id));
       toast({ title: 'Request declined', description: `Declined ${request.requester.username}'s request.` });
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: err.message || 'Failed to reject request', variant: 'destructive' });
     }
     setProcessingId(null);
   };

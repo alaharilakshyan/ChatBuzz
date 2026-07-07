@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useSocket } from '@/contexts/SocketContext';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Search, UserPlus, Loader2, CheckCircle, Clock, Users } from 'lucide-react';
+import { userService } from '@/services/user.service';
+import { friendService } from '@/services/friend.service';
 
 interface SearchResult {
   _id: string;
@@ -18,7 +20,7 @@ interface SearchResult {
 }
 
 export const UserSearch = () => {
-  const { user, getToken } = useAuth();
+  const { user } = useAuth();
   const { socket } = useSocket();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,29 +28,21 @@ export const UserSearch = () => {
   const [searching, setSearching] = useState(false);
   const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
   const handleSearch = async () => {
     if (!user || !searchQuery.trim()) return;
     setSearching(true);
     setResults([]);
 
     try {
-      const token = await getToken();
-
       // Search all users
-      const res = await fetch(`${API_URL}/users/search`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Search failed');
-      const data: any[] = await res.json();
+      const data = await userService.searchUsers();
 
       // Filter by search query client-side
       const [usernameSearch, tagSearch] = searchQuery.includes('#')
         ? searchQuery.split('#')
         : [searchQuery, ''];
 
-      const filtered = data.filter((p) => {
+      const filtered = data.filter((p: any) => {
         if (p._id === user.id) return false;
         const nameMatch = p.username.toLowerCase().includes(usernameSearch.toLowerCase());
         const tagMatch = tagSearch ? p.user_tag === tagSearch : true;
@@ -64,22 +58,17 @@ export const UserSearch = () => {
       // Fetch friend statuses for found users
       const statusMap: Record<string, { status: string; requestId: string; direction: string }> = {};
       await Promise.all(
-        filtered.map(async (p) => {
+        filtered.map(async (p: any) => {
           try {
-            const statusRes = await fetch(`${API_URL}/friends/status/${p._id}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            if (statusRes.ok) {
-              const s = await statusRes.json();
-              statusMap[p._id] = s;
-            }
+            const s = await friendService.getFriendshipStatus(p._id);
+            statusMap[p._id] = s;
           } catch {
             // ignore individual status errors
           }
         })
       );
 
-      const mapped: SearchResult[] = filtered.map((p) => {
+      const mapped: SearchResult[] = filtered.map((p: any) => {
         const s = statusMap[p._id];
         let friendStatus: SearchResult['friendStatus'] = 'none';
         if (s?.status === 'accepted') friendStatus = 'accepted';
@@ -107,20 +96,7 @@ export const UserSearch = () => {
   const handleSendRequest = async (target: SearchResult) => {
     setSendingRequest(target._id);
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/friends/request`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ recipientId: target._id })
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to send request');
-      }
+      await friendService.sendFriendRequest(target._id);
 
       // Notify recipient via socket if they are online
       if (socket) {
@@ -134,7 +110,7 @@ export const UserSearch = () => {
 
       toast({ title: 'Friend request sent!', description: `Request sent to ${target.username}` });
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: err.message || 'Failed to send request', variant: 'destructive' });
     }
     setSendingRequest(null);
   };

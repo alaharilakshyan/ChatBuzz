@@ -16,11 +16,12 @@ export function sendSuccess(res, data, status = 200) {
 /**
  * Sends a standardized error response.
  */
-export function sendError(res, error, message, code = 'BAD_REQUEST', status = 400) {
+export function sendError(res, error, message, code = 'BAD_REQUEST', status = 400, details = {}) {
   return res.status(status).json({
     success: false,
     error: error || 'Bad Request',
     message: message || error || 'An error occurred',
-    code
+    code,
+    details
   });
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,16 +10,16 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Upload, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+import { api } from '@/api/apiClient';
+
 const Profile = () => {
-  const { user, updateProfile, getToken } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [username, setUsername] = useState(user?.username || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   const handleSave = async () => {
     if (!user) return;
@@ -34,18 +34,9 @@ const Profile = () => {
   };
 
   const uploadFile = async (file: File) => {
-    const token = await getToken();
     const formData = new FormData();
     formData.append('file', file);
-    
-    const res = await fetch(`${API_URL}/uploads/upload`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData
-    });
-    
-    if (!res.ok) throw new Error('Failed to upload file');
-    return await res.json();
+    return api.post('/uploads/upload', formData);
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

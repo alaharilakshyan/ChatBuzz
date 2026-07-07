@@ -8,7 +8,8 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Image as ImageIcon, FileText, Download, Loader2 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
+import { chatService } from '@/services/chat.service';
 
 interface MediaGalleryDialogProps {
   open: boolean;
@@ -21,10 +22,8 @@ export const MediaGalleryDialog: React.FC<MediaGalleryDialogProps> = ({
   onOpenChange,
   targetUserId
 }) => {
-  const { getToken } = useAuth();
   const [loading, setLoading] = useState(true);
   const [media, setMedia] = useState<any[]>([]);
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     if (open && targetUserId) {
@@ -35,14 +34,8 @@ export const MediaGalleryDialog: React.FC<MediaGalleryDialogProps> = ({
   const fetchMedia = async () => {
     setLoading(true);
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/chat/${targetUserId}/media`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMedia(data);
-      }
+      const data = await chatService.getSharedMedia(targetUserId);
+      setMedia(data);
     } catch (e) {
       console.error('Error fetching media:', e);
     }

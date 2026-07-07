@@ -24,6 +24,8 @@ import { VoiceWaveform } from './VoiceWaveform';
 import { useToast } from '@/hooks/use-toast';
 import { decryptMessage, isEncrypted } from '@/utils/encryption';
 import gsap from 'gsap';
+import { chatService } from '@/services/chat.service';
+
 
 interface Message {
   id: string;
@@ -118,8 +120,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         const matches = contentText.match(urlRegex);
         if (matches && matches.length > 0) {
           const targetUrl = matches[0];
-          fetch(`${API_URL}/chat/link-preview/scraper?url=${encodeURIComponent(targetUrl)}`)
-            .then(res => res.json())
+          chatService.scrapeLinkPreview(targetUrl)
             .then(data => {
               if (data && (data.title || data.description)) {
                 setLinkPreview({ ...data, url: targetUrl });
@@ -204,15 +205,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const handleDeleteFromDbSilent = async () => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      
-      // Call real DELETE endpoint for ephemeral messages
-      await fetch(`${API_URL}/chat/${message.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      await chatService.deleteMessage(message.id);
     } catch (error) {
       console.error('Error deleting ephemeral message:', error);
     }
@@ -220,30 +213,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const handleDelete = async () => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      
-      // Call real DELETE endpoint
-      const response = await fetch(`${API_URL}/chat/${message.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete message');
-      }
-
+      await chatService.deleteMessage(message.id);
       onDelete?.(message.id);
       toast({
         title: 'Message deleted',
         description: 'Message has been deleted for everyone',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting message:', error);
       toast({
         title: 'Error',
-        description: 'Failed to delete message',
+        description: error.message || 'Failed to delete message',
         variant: 'destructive',
       });
     }

@@ -23,11 +23,26 @@ router.post('/register', validateRequest(registerSchema), async (req, res) => {
     // Check if user already exists
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
-      return sendError(res, 'Conflict', 'Email already registered', 'EMAIL_ALREADY_REGISTERED', 400);
+      return sendError(res, 'Conflict', 'Email already registered', 'EMAIL_ALREADY_REGISTERED', 409);
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const userTag = Math.floor(1000 + Math.random() * 9000).toString();
+    
+    let userTag;
+    let isUnique = false;
+    let retries = 0;
+    while (!isUnique && retries < 10) {
+      userTag = Math.floor(1000 + Math.random() * 9000).toString();
+      const existingTag = await User.findOne({ username: sanitizedUsername, user_tag: userTag });
+      if (!existingTag) {
+        isUnique = true;
+      }
+      retries++;
+    }
+
+    if (!isUnique) {
+      return sendError(res, 'Conflict', 'Failed to generate a unique user tag. Please try again.', 'TAG_GENERATION_FAILED', 409);
+    }
 
     const user = new User({
       email: normalizedEmail,

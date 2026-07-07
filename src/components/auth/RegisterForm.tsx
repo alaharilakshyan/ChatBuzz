@@ -43,9 +43,9 @@ export const RegisterForm = () => {
       await register(username, email, password);
       toast({
         title: 'Registration Successful!',
-        description: 'Welcome to ChatBuzz.',
+        description: 'Account created. Please log in with your credentials.',
       });
-      navigate('/chat');
+      navigate('/login');
     } catch (err: any) {
       toast({
         title: 'Registration Failed',

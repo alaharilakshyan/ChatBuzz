@@ -155,10 +155,32 @@ router.delete('/request/:requestId', async (req, res) => {
 });
 
 /**
+ * GET /api/friends/requests
+ * Get all pending friend requests for the current user
+ */
+router.get('/requests', async (req, res) => {
+  try {
+    const user = await User.findById(req.session.user.id);
+    if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);
+
+    const requests = await FriendRequest.find({
+      recipient: user._id,
+      status: 'pending'
+    }).populate('requester', 'username avatar_url user_tag authId');
+
+    return sendSuccess(res, requests);
+  } catch (err) {
+    console.error('Error getting friend requests:', err);
+    return sendError(res, 'Server Error', 'Server error', 'SERVER_ERROR', 500);
+  }
+});
+
+/**
  * GET /api/friends
  * Get all accepted friends
  */
 router.get('/', async (req, res) => {
+
   try {
     const user = await User.findById(req.session.user.id);
     if (!user) return sendError(res, 'Unauthorized', 'Unauthorized', 'UNAUTHORIZED', 401);

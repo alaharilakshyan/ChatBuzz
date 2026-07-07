@@ -8,7 +8,8 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Search, Loader2, Calendar } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
+import { chatService } from '@/services/chat.service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { format } from 'date-fns';
 
@@ -23,24 +24,16 @@ export const GlobalSearchDialog: React.FC<SearchDialogProps> = ({
   onOpenChange,
   onSelectMessage
 }) => {
-  const { getToken } = useAuth();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any[]>([]);
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   const handleSearch = async () => {
     if (!query.trim()) return;
     setLoading(true);
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/chat/search/query?q=${encodeURIComponent(query)}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setResults(data);
-      }
+      const data = await chatService.searchMessages(query);
+      setResults(data);
     } catch (e) {
       console.error(e);
     }

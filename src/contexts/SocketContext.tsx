@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useAuth } from './AuthContext';
+import { useAuth } from '@/hooks/useAuth';
+
+import { config } from '@/api/config';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -30,19 +32,28 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const { user } = useAuth();
 
   useEffect(() => {
-    let cleanupSocket: (() => void) | null = null;
+    let active = true;
+    let activeSocket: Socket | null = null;
 
     const initSocket = async () => {
       if (!user) return;
 
-      const rawUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const backendUrl = rawUrl.endsWith('/api') ? rawUrl.replace(/\/api$/, '') : rawUrl;
-
-      const newSocket = io(backendUrl, {
+      const newSocket = io(config.socketUrl, {
         withCredentials: true,
-        transports: ['websocket', 'polling']
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        randomizationFactor: 0.5
       });
 
+      if (!active) {
+        newSocket.disconnect();
+        return;
+      }
+
+      activeSocket = newSocket;
       setSocket(newSocket);
 
       newSocket.on('connect', () => {
@@ -62,15 +73,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           return next;
         });
       });
-
-      cleanupSocket = () => {
-        newSocket.disconnect();
-      };
     };
 
     initSocket();
     return () => {
-      cleanupSocket?.();
+      active = false;
+      if (activeSocket) {
+        activeSocket.disconnect();
+      }
+      setSocket(null);
+      setIsConnected(false);
     };
   }, [user]);
 

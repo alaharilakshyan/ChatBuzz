@@ -6,9 +6,11 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, ShieldAlert, Flag } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { userService } from '@/services/user.service';
+import { chatService } from '@/services/chat.service';
 
 interface Profile {
   id: string;
@@ -37,9 +39,6 @@ export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({
   const [loading, setLoading] = useState(true);
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockLoading, setBlockLoading] = useState(false);
-  
-  const { getToken } = useAuth();
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   useEffect(() => {
     if (open && userId) {
@@ -50,15 +49,9 @@ export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({
 
   const checkBlockStatus = async () => {
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/users/blocked/list`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const list = await res.json();
-        const found = list.some((u: any) => u._id === userId);
-        setIsBlocked(found);
-      }
+      const list = await userService.getBlockedUsers();
+      const found = list.some((u: any) => u._id === userId);
+      setIsBlocked(found);
     } catch (e) {
       console.error(e);
     }
@@ -67,31 +60,19 @@ export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({
   const fetchProfileAndMedia = async () => {
     setLoading(true);
     try {
-      const token = await getToken();
-      
       // Fetch details from backend
-      const res = await fetch(`${API_URL}/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const data = await userService.getUserById(userId);
+      setProfile({
+        id: data._id,
+        username: data.username,
+        user_tag: data.user_tag,
+        avatar_url: data.avatar_url,
+        bio: data.bio || 'No bio yet.'
       });
-      if (res.ok) {
-        const data = await res.json();
-        setProfile({
-          id: data._id,
-          username: data.username,
-          user_tag: data.user_tag,
-          avatar_url: data.avatar_url,
-          bio: data.bio || 'No bio yet.'
-        });
-      }
 
       // Fetch shared media
-      const mediaRes = await fetch(`${API_URL}/chat/${userId}/media`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (mediaRes.ok) {
-        const mediaData = await mediaRes.json();
-        setSharedMedia(mediaData);
-      }
+      const mediaData = await chatService.getSharedMedia(userId);
+      setSharedMedia(mediaData);
     } catch (error) {
       console.error(error);
     }
@@ -101,31 +82,24 @@ export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({
   const handleBlockToggle = async () => {
     setBlockLoading(true);
     try {
-      const token = await getToken();
-      const endpoint = isBlocked ? 'unblock' : 'block';
-      const res = await fetch(`${API_URL}/users/${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ targetUserId: userId })
-      });
+      if (isBlocked) {
+        await userService.unblockUser(userId);
+      } else {
+        await userService.blockUser(userId);
+      }
 
-      if (res.ok) {
-        setIsBlocked(!isBlocked);
-        toast({
-          title: isBlocked ? 'User Unblocked' : 'User Blocked',
-          description: isBlocked 
-            ? 'You can now exchange messages and requests again.'
-            : 'They will no longer be able to message you or find you.',
-        });
-        if (!isBlocked) {
-          // If we just blocked them, close the profile dialog
-          onOpenChange(false);
-          // Trigger a refresh of friends sidebar list by emitting a custom storage/refresh event or reload
-          window.location.reload();
-        }
+      setIsBlocked(!isBlocked);
+      toast({
+        title: isBlocked ? 'User Unblocked' : 'User Blocked',
+        description: isBlocked 
+          ? 'You can now exchange messages and requests again.'
+          : 'They will no longer be able to message you or find you.',
+      });
+      if (!isBlocked) {
+        // If we just blocked them, close the profile dialog
+        onOpenChange(false);
+        // Trigger a refresh of friends sidebar list
+        window.location.reload();
       }
     } catch (error) {
       console.error(error);
@@ -138,22 +112,11 @@ export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({
     if (!reason) return;
 
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/users/report`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ targetUserId: userId, reason })
+      await userService.reportUser(userId, reason);
+      toast({
+        title: 'Report Submitted',
+        description: 'Thank you. We will review this user shortly.',
       });
-
-      if (res.ok) {
-        toast({
-          title: 'Report Submitted',
-          description: 'Thank you. We will review this user shortly.',
-        });
-      }
     } catch (error) {
       console.error(error);
     }

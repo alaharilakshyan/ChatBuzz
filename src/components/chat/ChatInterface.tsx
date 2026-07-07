@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useSocket } from '@/contexts/SocketContext';
 import { useToast } from '@/hooks/use-toast';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { encryptMessage } from '@/utils/encryption';
+import { chatService } from '@/services/chat.service';
+import { workspaceService } from '@/services/workspace.service';
+import { api } from '@/api/apiClient';
 import { WorkspaceSidebar, Workspace } from './WorkspaceSidebar';
 import { ChannelsList, Channel } from './ChannelsList';
 import { ChatHeader } from './ChatHeader';
@@ -72,7 +75,7 @@ interface Profile {
 }
 
 export const ChatInterface = () => {
-  const { user, getToken } = useAuth();
+  const { user } = useAuth();
   const { socket, onlineUsers } = useSocket();
   const { toast: uiToast } = useToast();
 
@@ -122,7 +125,7 @@ export const ChatInterface = () => {
   const activeChannel = channels.find(c => c.id === activeChannelId);
   const selectedFriend = allProfiles.find(p => p.id === selectedFriendId);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 
   const normalizeMessage = (msg: any): Message => {
     const sender = typeof msg?.senderId === 'object' && msg.senderId !== null ? msg.senderId : null;
@@ -254,14 +257,8 @@ export const ChatInterface = () => {
 
   const fetchWorkspaces = async () => {
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/workspaces`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setWorkspaces(data.map((w: any) => ({ ...w, id: w._id })));
-      }
+      const data = await workspaceService.getWorkspaces();
+      setWorkspaces(data.map((w: any) => ({ ...w, id: w._id })));
     } catch (err) {
       console.error('Failed to fetch workspaces', err);
     }
@@ -274,21 +271,13 @@ export const ChatInterface = () => {
 
   const fetchAllProfiles = async () => {
     try {
-      const token = await getToken();
-      // Fetch conversations with last message and unread count
-      const res = await fetch(`${API_URL}/chat/conversations/list`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // Map conversations to profiles with last message info
-        setAllProfiles(data.map((c: any) => ({
-          ...c.friend,
-          id: c.friend._id,
-          lastMessage: c.lastMessage,
-          unreadCount: c.unreadCount
-        })));
-      }
+      const data = await chatService.getConversationList();
+      setAllProfiles(data.map((c: any) => ({
+        ...c.friend,
+        id: c.friend._id,
+        lastMessage: c.lastMessage,
+        unreadCount: c.unreadCount
+      })));
     } catch (err) {
       console.error('Failed to fetch conversations', err);
     }
@@ -297,14 +286,8 @@ export const ChatInterface = () => {
   const fetchMessages = async (targetId: string) => {
     setIsLoading(true);
     try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/chat/${targetId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMessages((data || []).map((msg: any) => normalizeMessage(msg)));
-      }
+      const data = await chatService.getMessageHistory(targetId);
+      setMessages((data || []).map((msg: any) => normalizeMessage(msg)));
     } catch (err) {
       console.error('Failed to fetch messages', err);
     }
@@ -327,30 +310,18 @@ export const ChatInterface = () => {
     
     // Mark messages as read when opening conversation
     try {
-      const token = await getToken();
-      // Get messages to mark as read
-      const res = await fetch(`${API_URL}/chat/${friendId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const messages = await res.json();
-        // Mark all unread messages from the other user as read
-        const unreadMessages = messages.filter((m: any) => 
-          m.senderId !== user?.id && !m.readBy?.includes(user?.id)
-        );
-        
-        await Promise.all(
-          unreadMessages.map((m: any) =>
-            fetch(`${API_URL}/chat/${m._id}/read`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}` }
-            })
-          )
-        );
-        
-        // Refresh conversations to update unread counts
-        fetchAllProfiles();
-      }
+      const messages = await chatService.getMessageHistory(friendId);
+      // Mark all unread messages from the other user as read
+      const unreadMessages = messages.filter((m: any) => 
+        m.senderId !== user?.id && !m.readBy?.includes(user?.id)
+      );
+      
+      await Promise.all(
+        unreadMessages.map((m: any) => chatService.markAsRead(m._id))
+      );
+      
+      // Refresh conversations to update unread counts
+      fetchAllProfiles();
     } catch (err) {
       console.error('Error marking messages as read:', err);
     }
@@ -375,34 +346,20 @@ export const ChatInterface = () => {
 
     if (selectedFile) {
       try {
-        const token = await getToken();
         const formData = new FormData();
         formData.append('file', selectedFile);
-        const uploadRes = await fetch(`${API_URL}/uploads/upload`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData
+        const fileData = await api.post('/uploads/upload', formData);
+        attachmentsPayload.push({
+          name: fileData.name,
+          size: fileData.size,
+          url: fileData.url,
+          mime_type: fileData.mime_type
         });
         
-        if (uploadRes.ok) {
-          const fileData = await uploadRes.json();
-          attachmentsPayload.push({
-            name: fileData.name,
-            size: fileData.size,
-            url: fileData.url,
-            mime_type: fileData.mime_type
-          });
-          
-          if (selectedFile.type.startsWith('audio/') && !messageContent) {
-            messageContent = '[Voice message]';
-          } else if (!messageContent) {
-            messageContent = 'Sent a file';
-          }
-        } else {
-          toast.error("Failed to upload attachment");
-          setIsSending(false);
-          setUploading(false);
-          return;
+        if (selectedFile.type.startsWith('audio/') && !messageContent) {
+          messageContent = '[Voice message]';
+        } else if (!messageContent) {
+          messageContent = 'Sent a file';
         }
       } catch (err) {
         toast.error("Upload error");
@@ -444,15 +401,9 @@ export const ChatInterface = () => {
 
   const handleReply = async (message: any) => {
     try {
-      const token = await getToken();
       const messageId = message._id || message.id;
-      const res = await fetch(`${API_URL}/chat/${messageId}/reply`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setReplyingTo(data);
-      }
+      const data = await chatService.getReplyContext(messageId);
+      setReplyingTo(data);
     } catch (err) {
       console.error('Error fetching reply context:', err);
     }

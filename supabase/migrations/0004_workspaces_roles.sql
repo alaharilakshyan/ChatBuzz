@@ -118,13 +118,13 @@ CREATE POLICY "workspace_members_insert_policy" ON public.workspace_members
         EXISTS (
             SELECT 1 FROM public.workspace_members AS wm
             JOIN public.workspace_roles AS wr ON wm.role_id = wr.id
-            WHERE wm.workspace_id = workspace_id AND wm.user_id = auth.uid() 
+            WHERE wm.workspace_id = public.workspace_members.workspace_id AND wm.user_id = auth.uid() 
             AND wr.permissions @> ARRAY['invite_users'] AND wm.deleted_at IS NULL
         ) OR 
         -- Allow the creator/owner to insert the initial member record
         EXISTS (
             SELECT 1 FROM public.workspaces 
-            WHERE id = workspace_id AND owner_id = auth.uid()
+            WHERE id = public.workspace_members.workspace_id AND owner_id = auth.uid()
         )
     );
 
@@ -133,7 +133,7 @@ CREATE POLICY "workspace_members_update_policy" ON public.workspace_members
         EXISTS (
             SELECT 1 FROM public.workspace_members AS wm
             JOIN public.workspace_roles AS wr ON wm.role_id = wr.id
-            WHERE wm.workspace_id = workspace_id AND wm.user_id = auth.uid() 
+            WHERE wm.workspace_id = public.workspace_members.workspace_id AND wm.user_id = auth.uid() 
             AND wr.permissions @> ARRAY['manage_members'] AND wm.deleted_at IS NULL
         )
     );
@@ -144,7 +144,7 @@ CREATE POLICY "workspace_members_delete_policy" ON public.workspace_members
         EXISTS (
             SELECT 1 FROM public.workspace_members AS wm
             JOIN public.workspace_roles AS wr ON wm.role_id = wr.id
-            WHERE wm.workspace_id = workspace_id AND wm.user_id = auth.uid() 
+            WHERE wm.workspace_id = public.workspace_members.workspace_id AND wm.user_id = auth.uid() 
             AND wr.permissions @> ARRAY['manage_members'] AND wm.deleted_at IS NULL
         )
     );

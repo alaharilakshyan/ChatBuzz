@@ -11,8 +11,7 @@ VALUES
   ('temp-files', 'temp-files', false, 524288000, NULL)
 ON CONFLICT (id) DO NOTHING;
 
--- Enable RLS on storage objects if not already active
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
 
 -- 1. Avatars Policies
 CREATE POLICY "avatars_select" ON storage.objects

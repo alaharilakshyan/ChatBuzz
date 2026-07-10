@@ -63,7 +63,7 @@ CREATE POLICY "channels_insert_policy" ON public.channels
         EXISTS (
             SELECT 1 FROM public.workspace_members AS wm
             JOIN public.workspace_roles AS wr ON wm.role_id = wr.id
-            WHERE wm.workspace_id = workspace_id AND wm.user_id = auth.uid() 
+            WHERE wm.workspace_id = public.channels.workspace_id AND wm.user_id = auth.uid() 
             AND wr.permissions @> ARRAY['manage_channels'] AND wm.deleted_at IS NULL
         )
     );
@@ -73,7 +73,7 @@ CREATE POLICY "channels_update_policy" ON public.channels
         EXISTS (
             SELECT 1 FROM public.workspace_members AS wm
             JOIN public.workspace_roles AS wr ON wm.role_id = wr.id
-            WHERE wm.workspace_id = workspace_id AND wm.user_id = auth.uid() 
+            WHERE wm.workspace_id = public.channels.workspace_id AND wm.user_id = auth.uid() 
             AND wr.permissions @> ARRAY['manage_channels'] AND wm.deleted_at IS NULL
         )
     );
@@ -83,7 +83,7 @@ CREATE POLICY "channels_delete_policy" ON public.channels
         EXISTS (
             SELECT 1 FROM public.workspace_members AS wm
             JOIN public.workspace_roles AS wr ON wm.role_id = wr.id
-            WHERE wm.workspace_id = workspace_id AND wm.user_id = auth.uid() 
+            WHERE wm.workspace_id = public.channels.workspace_id AND wm.user_id = auth.uid() 
             AND wr.permissions @> ARRAY['manage_channels'] AND wm.deleted_at IS NULL
         )
     );
@@ -103,7 +103,7 @@ CREATE POLICY "channel_members_insert_policy" ON public.channel_members
             SELECT 1 FROM public.channels AS ch
             JOIN public.workspace_members AS wm ON ch.workspace_id = wm.workspace_id
             JOIN public.workspace_roles AS wr ON wm.role_id = wr.id
-            WHERE ch.id = channel_id AND wm.user_id = auth.uid() 
+            WHERE ch.id = public.channel_members.channel_id AND wm.user_id = auth.uid() 
             AND wr.permissions @> ARRAY['manage_channels'] AND wm.deleted_at IS NULL
         )
     );
@@ -115,7 +115,7 @@ CREATE POLICY "channel_members_delete_policy" ON public.channel_members
             SELECT 1 FROM public.channels AS ch
             JOIN public.workspace_members AS wm ON ch.workspace_id = wm.workspace_id
             JOIN public.workspace_roles AS wr ON wm.role_id = wr.id
-            WHERE ch.id = channel_id AND wm.user_id = auth.uid() 
+            WHERE ch.id = public.channel_members.channel_id AND wm.user_id = auth.uid() 
             AND wr.permissions @> ARRAY['manage_channels'] AND wm.deleted_at IS NULL
         )
     );

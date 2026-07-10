@@ -1,534 +1,167 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { FileText, Download, ExternalLink, Trash2, Volume2, Pause, Play, Eye, Forward, MoreVertical, Flame, Heart, Reply } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { MessageReactions } from './MessageReactions';
-import { OneTimeViewImage } from './OneTimeViewImage';
-import { InstagramMediaCard } from './InstagramMediaCard';
-import { VoiceWaveform } from './VoiceWaveform';
-import { useToast } from '@/hooks/use-toast';
-import { decryptMessage, isEncrypted } from '@/utils/encryption';
-import gsap from 'gsap';
-import { chatService } from '@/services/chat.service';
+'use client'
 
+import React, { useState, useEffect } from 'react'
+import { Flame, Lock, User, FileText, Download } from 'lucide-react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { createClient } from '@/utils/supabase/client'
 
-interface Message {
-  id: string;
-  sender_id: string;
-  receiver_id?: string;
-  channel_id?: string | null;
-  content: string;
-  file_url?: string | null;
-  file_name?: string | null;
-  file_size?: number | null;
-  attachments?: any;
-  metadata?: any;
-  is_ephemeral?: boolean;
-  expires_at?: string | null;
-  is_deleted?: boolean | null;
-  is_one_time_view?: boolean | null;
-  viewed_by?: string[] | null;
-  created_at: string;
+export interface Attachment {
+  name: string
+  mime_type: string
+  size: number
+  storage_path: string
+}
+
+export interface Message {
+  id: string
+  sender_id: string
+  receiver_id?: string | null
+  channel_id?: string | null
+  content: string | null
+  created_at: string
+  is_ephemeral?: boolean
+  is_one_time_view?: boolean
   sender?: {
-    username: string;
-    avatar_url: string | null;
-  };
+    username: string
+    avatar_url: string | null
+  }
+  attachments?: Attachment[]
 }
 
 interface MessageBubbleProps {
-  message: Message;
-  isSent: boolean;
-  currentUserId: string;
-  otherUserId: string; // Used for Direct Message keys
-  onDelete?: (messageId: string) => void;
-  onForward?: (message: Message) => void;
-  onReply?: (message: Message) => void;
+  message: Message
+  isSent: boolean
+  senderProfile: {
+    username: string
+    avatar_url: string | null
+  } | null
 }
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   isSent,
-  currentUserId,
-  otherUserId,
-  onDelete,
-  onForward,
-  onReply
+  senderProfile,
 }) => {
-  const { toast } = useToast();
-  const bubbleRef = useRef<HTMLDivElement>(null);
-  const heartRef = useRef<HTMLDivElement>(null);
+  const supabase = createClient()
+  const username = senderProfile?.username || message.sender?.username || 'Unknown User'
+  const avatarUrl = senderProfile?.avatar_url || message.sender?.avatar_url || null
 
-  // Extract file URL, name and size
-  const url = message.file_url || (message.attachments && Array.isArray(message.attachments) && message.attachments[0]?.url) || null;
-  const name = message.file_name || (message.attachments && Array.isArray(message.attachments) && message.attachments[0]?.name) || null;
-  const size = message.file_size || (message.attachments && Array.isArray(message.attachments) && message.attachments[0]?.size) || null;
+  const formattedTime = new Date(message.created_at).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 
-  const isImage = url && /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
-  const isVideo = url && /\.(mp4|webm|ogg)$/i.test(url);
-  const isAudio = url && (/\.(mp3|wav|ogg|m4a)$/i.test(url) || name?.includes('Voice') || message.content === '[Voice message]');
+  // Attachment references
+  const attachment = message.attachments && message.attachments.length > 0 ? message.attachments[0] : null
+  const [fileUrl, setFileUrl] = useState<string | null>(null)
 
-  const [decryptedContent, setDecryptedContent] = useState<string>('');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [audioElement] = useState(() => new Audio());
-  const [audioProgress, setAudioProgress] = useState(0);
-  const [isDecrypting, setIsDecrypting] = useState(true);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  
-  // Snapchat self-destruct states
-  const [isMelted, setIsMelted] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
-  const countdownIntervalRef = useRef<number | null>(null);
-
-  // Double tap animation states
-  const [showHeartPop, setShowHeartPop] = useState(false);
-
-  const [linkPreview, setLinkPreview] = useState<{ title: string; description: string; image: string; url: string } | null>(null);
-
-  // Decrypt content
   useEffect(() => {
-    const decrypt = async () => {
-      setIsDecrypting(true);
-      try {
-        let contentText = '';
-        if (message.content && isEncrypted(message.content)) {
-          contentText = await decryptMessage(message.content, currentUserId, otherUserId);
-          setDecryptedContent(contentText);
-        } else {
-          contentText = message.content || '';
-          setDecryptedContent(contentText);
-        }
-
-        // Search for URL links
-        const urlRegex = /(https?:\/\/[^\s]+)/gi;
-        const matches = contentText.match(urlRegex);
-        if (matches && matches.length > 0) {
-          const targetUrl = matches[0];
-          chatService.scrapeLinkPreview(targetUrl)
-            .then(data => {
-              if (data && (data.title || data.description)) {
-                setLinkPreview({ ...data, url: targetUrl });
-              }
-            })
-            .catch(e => console.error(e));
-        }
-      } catch (error) {
-        console.error('Decryption failed:', error);
-        setDecryptedContent(message.content || '');
+    if (attachment) {
+      const { data } = supabase.storage.from('attachments').getPublicUrl(attachment.storage_path)
+      if (data?.publicUrl) {
+        setFileUrl(data.publicUrl)
       }
-      setIsDecrypting(false);
-    };
-    decrypt();
-  }, [message.content, currentUserId, otherUserId]);
-
-  // Audio elements progress
-  useEffect(() => {
-    const updateProgress = () => {
-      if (audioElement.duration) {
-        setAudioProgress((audioElement.currentTime / audioElement.duration) * 100);
-      }
-    };
-    audioElement.addEventListener('timeupdate', updateProgress);
-    return () => audioElement.removeEventListener('timeupdate', updateProgress);
-  }, [audioElement]);
-
-  // GSAP Spring on mount
-  useEffect(() => {
-    if (bubbleRef.current) {
-      gsap.fromTo(
-        bubbleRef.current,
-        { scale: 0.92, opacity: 0, y: 10 },
-        { scale: 1, opacity: 1, y: 0, duration: 0.4, ease: "back.out(1.5)" }
-      );
     }
-  }, [message.id]);
+  }, [attachment, supabase])
 
-  // Snapchat self-destruct mechanism
-  useEffect(() => {
-    if (!message.is_ephemeral || isMelted) return;
-
-    const startCountdown = (expiryTime: string) => {
-      const getRemaining = () => {
-        const diff = new Date(expiryTime).getTime() - Date.now();
-        return Math.max(0, Math.ceil(diff / 1000));
-      };
-
-      const rem = getRemaining();
-      setSecondsLeft(rem);
-
-      if (rem <= 0) {
-        setIsMelted(true);
-        // Suppress or delete from database
-        handleDeleteFromDbSilent();
-        return;
-      }
-
-      countdownIntervalRef.current = window.setInterval(() => {
-        const left = getRemaining();
-        setSecondsLeft(left);
-        if (left <= 0) {
-          setIsMelted(true);
-          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-          handleDeleteFromDbSilent();
-        }
-      }, 1000);
-    };
-
-    if (message.expires_at) {
-      startCountdown(message.expires_at);
-    } else if (!isSent && !message.expires_at) {
-      // Mock update expires_at
-      const expiry = new Date(Date.now() + 10 * 1000).toISOString();
-      startCountdown(expiry);
-    }
-
-    return () => {
-      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    };
-  }, [message.is_ephemeral, message.expires_at, isSent]);
-
-  const handleDeleteFromDbSilent = async () => {
-    try {
-      await chatService.deleteMessage(message.id);
-    } catch (error) {
-      console.error('Error deleting ephemeral message:', error);
-    }
-  };
-
-  const handleDelete = async () => {
-    try {
-      await chatService.deleteMessage(message.id);
-      onDelete?.(message.id);
-      toast({
-        title: 'Message deleted',
-        description: 'Message has been deleted for everyone',
-      });
-    } catch (error: any) {
-      console.error('Error deleting message:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete message',
-        variant: 'destructive',
-      });
-    }
-    setShowDeleteDialog(false);
-  };
-
-  const handleDoubleClick = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    setShowHeartPop(true);
-    
-    // Heart animation
-    setTimeout(() => setShowHeartPop(false), 800);
-
-    // Mock reaction API call
-    console.log("Heart reaction triggered");
-  };
-
-  const toggleAudioPlayback = () => {
-    if (!url) return;
-
-    if (isPlaying) {
-      audioElement.pause();
-      setIsPlaying(false);
-    } else {
-      audioElement.src = url;
-      audioElement.play();
-      setIsPlaying(true);
-      
-      audioElement.onended = () => {
-        setIsPlaying(false);
-        setAudioProgress(0);
-      };
-    }
-  };
-
-  if (isMelted) return null; // Dom opacity 0 / removed
-
-  if (message.is_deleted) {
-    return (
-      <div className={`flex gap-2 mb-3 ${isSent ? 'justify-end' : 'justify-start'}`}>
-        <div className="px-4 py-2 rounded-2xl bg-muted/30 italic text-muted-foreground text-xs">
-          🗑️ Message deleted
-        </div>
-      </div>
-    );
-  }
-
-  // Detect card layout: check if keyword townhouse is present in decrypted content, or metadata says so
-  const hasCard = message.metadata?.has_card || decryptedContent.toLowerCase().includes("townhouse");
-  const isOneTimeView = (message.is_one_time_view || message.metadata?.is_one_time_view) && isImage;
+  const isImage = attachment?.mime_type.startsWith('image/')
 
   return (
-    <div 
-      ref={bubbleRef} 
-      className={`flex gap-2 mb-3 relative group ${isSent ? 'justify-end' : 'justify-start'} ${message.is_ephemeral ? 'animate-melt-delay' : ''} ${isMelted ? 'animate-melt' : ''}`}
-    >
-      {/* Sender Avatar for received channel messages */}
-      {!isSent && message.sender && (
-        <div className="w-8 h-8 rounded-xl bg-[#0C1412] text-[#F4F7F6] text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5 select-none shadow-sm">
-          {message.sender.username.charAt(0).toUpperCase()}
-        </div>
+    <div className={`flex items-end gap-2 w-full mb-3 ${isSent ? 'justify-end' : 'justify-start'}`}>
+      {/* Avatar */}
+      {!isSent && (
+        <Avatar className="h-8 w-8 flex-shrink-0">
+          <AvatarImage src={avatarUrl || undefined} alt={username} />
+          <AvatarFallback className="bg-emerald-500/10 text-emerald-600 text-xs font-bold">
+            {username.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
       )}
 
-      <div className={`flex flex-col max-w-[80%] sm:max-w-[70%] ${isSent ? 'items-end' : 'items-start'}`}>
-        {/* Username for channels */}
-        {!isSent && message.sender && (
-          <span className="text-[10px] font-bold text-[#1A2421]/60 mb-0.5 ml-1">
-            {message.sender.username}
+      {/* Message Box */}
+      <div className={`flex flex-col max-w-[70%] space-y-1`}>
+        {/* Username for other senders */}
+        {!isSent && (
+          <span className="text-[11px] text-slate-500 font-semibold pl-2">
+            {username}
           </span>
         )}
 
-        <div 
-          className={`relative rounded-3xl px-5 py-3 shadow-[0_4px_16px_rgba(0,0,0,0.05)] transition-all duration-200 select-none cursor-pointer border ${
-            isSent 
-              ? 'bg-[#9AC68A] dark:bg-[#4ADE80] text-white dark:text-slate-950 rounded-br-sm border-transparent' 
-              : 'bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-white/60 dark:border-slate-700/50 rounded-bl-sm text-gray-900 dark:text-white'
+        <div
+          className={`rounded-2xl px-4 py-2.5 text-[14px] shadow-sm relative group transition-all duration-200 ${
+            isSent
+              ? 'bg-emerald-500 text-white rounded-br-none'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-none'
           }`}
-          onDoubleClick={handleDoubleClick}
         >
-          {/* Quick Double tap Heart Feedback */}
-          {showHeartPop && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <Heart className="w-10 h-10 text-red-500 fill-current animate-bounce-subtle duration-300" />
-            </div>
+          {/* Ephemeral / Flame Icon Indicator */}
+          {message.is_ephemeral && (
+            <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white p-0.5 rounded-full shadow-md">
+              <Flame className="w-3.5 h-3.5 fill-current" />
+            </span>
           )}
 
-          {/* Message actions dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`absolute ${isSent ? '-left-8' : '-right-8'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7 p-0 text-[#1A2421]/50 hover:text-[#0C1412]`}
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align={isSent ? 'end' : 'start'} className="w-40 rounded-xl">
-              {onReply && (
-                <DropdownMenuItem onClick={() => onReply(message)} className="rounded-lg">
-                  <Reply className="h-4 w-4 mr-2" />
-                  Reply
-                </DropdownMenuItem>
-              )}
-              {onForward && (
-                <DropdownMenuItem onClick={() => onForward(message)} className="rounded-lg">
-                  <Forward className="h-4 w-4 mr-2" />
-                  Forward
-                </DropdownMenuItem>
-              )}
-              {isSent && (
-                <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-destructive focus:text-destructive rounded-lg">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          {/* Snapchat Ephemeral status bar */}
-          {message.is_ephemeral && secondsLeft !== null && (
-            <div className="flex items-center gap-1 text-[10px] text-orange-500 font-bold mb-1">
-              <Flame className="w-3.5 h-3.5 fill-current animate-pulse" />
-              <span>Self-destruct in {secondsLeft}s</span>
-            </div>
+          {/* One-Time View Lock Icon */}
+          {message.is_one_time_view && (
+            <span className="absolute -top-1.5 -left-1.5 bg-indigo-500 text-white p-0.5 rounded-full shadow-md">
+              <Lock className="w-3.5 h-3.5" />
+            </span>
           )}
 
-          {/* One-time view image */}
-          {isOneTimeView && url ? (
-            <OneTimeViewImage
-              imageUrl={url}
-              messageId={message.id}
-              currentUserId={currentUserId}
-              viewedBy={message.viewed_by || []}
-              isSender={isSent}
-            />
-          ) : isAudio && url ? (
-            /* Custom Audio waves waveform */
-            <VoiceWaveform duration="0:12" />
-          ) : hasCard ? (
-            /* Instagram style rich metrics card */
-            <InstagramMediaCard title={decryptedContent || "Townhouse Suite"} />
-          ) : url && (
-            /* Regular file/image/video */
-            <div className="mb-2">
+          {/* Content text */}
+          {message.content && <p className="leading-relaxed break-words">{message.content}</p>}
+
+          {/* Render Attachment */}
+          {attachment && fileUrl && (
+            <div className="mt-2">
               {isImage ? (
-                <div className="space-y-2">
+                <div className="rounded-xl overflow-hidden max-w-sm border border-slate-200/50 dark:border-slate-700/50 shadow-sm bg-slate-200 dark:bg-slate-900">
                   <img
-                    src={url}
-                    alt={name || 'Image'}
-                    className="max-w-full rounded-xl max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity shadow-sm border border-[#1A2421]/5"
-                    onClick={() => window.open(url, '_blank')}
+                    src={fileUrl}
+                    alt={attachment.name}
+                    className="w-full h-auto object-cover max-h-60"
                   />
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant={isSent ? "secondary" : "outline"}
-                      className="flex-1 h-8 text-xs rounded-xl"
-                      onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = name || 'image';
-                        link.click();
-                      }}
-                    >
-                      <Download className="h-3 w-3 mr-1" />
-                      Save
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={isSent ? "secondary" : "outline"}
-                      className="flex-1 h-8 text-xs rounded-xl"
-                      onClick={() => window.open(url, '_blank')}
-                    >
-                      <ExternalLink className="h-3 w-3 mr-1" />
-                      Open
-                    </Button>
-                  </div>
-                </div>
-              ) : isVideo ? (
-                <div className="space-y-2">
-                  <video
-                    src={url}
-                    controls
-                    className="max-w-full rounded-xl max-h-64 shadow-sm"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant={isSent ? "secondary" : "outline"}
-                      className="flex-1 h-8 text-xs rounded-xl"
-                      onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = name || 'video';
-                        link.click();
-                      }}
-                    >
-                      <Download className="h-3 w-3 mr-1" />
-                      Save
-                    </Button>
-                  </div>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`flex items-center gap-3 p-3 rounded-xl transition-colors ${
-                      isSent ? 'bg-white/10 hover:bg-white/20' : 'bg-muted/50 hover:bg-muted'
-                    }`}
-                  >
-                    <div className={`p-2 rounded-lg ${isSent ? 'bg-white/20' : 'bg-primary/10'}`}>
-                      <FileText className="h-5 w-5" />
-                    </div>
-                    <span className="text-sm truncate font-medium max-w-[120px]">{name}</span>
-                  </a>
-                  <Button
-                    size="sm"
-                    variant={isSent ? "secondary" : "outline"}
-                    className="w-full h-8 text-xs rounded-xl"
-                    onClick={() => {
-                      const link = document.createElement('a');
-                      link.href = url;
-                      link.download = name || 'file';
-                      link.click();
-                    }}
-                  >
-                    <Download className="h-3 w-3 mr-1" />
-                    Download
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Text content (skip if it was just rendered as a townhouse card) */}
-          {decryptedContent && decryptedContent !== 'Sent a file' && decryptedContent !== '[Voice message]' && !hasCard && (
-            <div className="space-y-2">
-              <p className="text-sm break-words whitespace-pre-wrap leading-relaxed tracking-tight">
-                {decryptedContent}
-              </p>
-              {linkPreview && (
                 <a
-                  href={linkPreview.url}
+                  href={fileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block mt-2 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                  download={attachment.name}
+                  className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-colors ${
+                    isSent
+                      ? 'bg-emerald-600/50 border-emerald-400 text-white hover:bg-emerald-600/70'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-900/80'
+                  }`}
                 >
-                  {linkPreview.image && (
-                    <img 
-                      src={linkPreview.image} 
-                      alt={linkPreview.title} 
-                      className="w-full h-32 object-cover border-b border-black/10 dark:border-white/10"
-                    />
-                  )}
-                  <div className="p-3">
-                    <h5 className="font-bold text-xs line-clamp-1 text-gray-900 dark:text-white">
-                      {linkPreview.title || linkPreview.url}
-                    </h5>
-                    {linkPreview.description && (
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                        {linkPreview.description}
-                      </p>
-                    )}
+                  <FileText className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  <div className="flex flex-col truncate text-left">
+                    <span className="font-bold truncate max-w-[150px]">{attachment.name}</span>
+                    <span className="opacity-60 text-[9px]">{(attachment.size / 1024).toFixed(1)} KB</span>
                   </div>
+                  <Download className="w-4 h-4 ml-auto opacity-60 hover:opacity-100" />
                 </a>
               )}
             </div>
           )}
-          
-          {/* Timestamp */}
-          <span className={`text-[10px] font-medium mt-1.5 block ${
-            isSent ? 'opacity-80 text-right text-white/90 dark:text-slate-950/80' : 'text-gray-500 dark:text-gray-400'
-          }`}>
-            {new Date(message.created_at).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </span>
+
+          {/* Metadata / Time */}
+          <div className="flex items-center justify-end gap-1 mt-1 opacity-60 text-[9px]">
+            <span>{formattedTime}</span>
+          </div>
         </div>
-        
-        {/* Reactions List underneath */}
-        <MessageReactions messageId={message.id} currentUserId={currentUserId} />
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent className="rounded-3xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-bold text-[#0C1412]">Delete Message</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this message? This action cannot be undone and will delete the message for everyone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white rounded-xl">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Sender Avatar (Right side) */}
+      {isSent && (
+        <Avatar className="h-8 w-8 flex-shrink-0">
+          <AvatarImage src={avatarUrl || undefined} alt={username} />
+          <AvatarFallback className="bg-emerald-500 text-white font-bold text-xs">
+            {username.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+      )}
     </div>
-  );
-};
-export default MessageBubble;
+  )
+}
+export default MessageBubble

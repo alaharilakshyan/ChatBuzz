@@ -1,61 +1,36 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Loader2, Lock, Mail, User, ArrowRight } from 'lucide-react';
+'use client'
+
+import React, { useActionState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { signupAction } from '@/actions/auth'
+import { useToast } from '@/hooks/use-toast'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Loader2, Lock, Mail, User, ArrowRight } from 'lucide-react'
 
 export const RegisterForm = () => {
-  const { register } = useAuth();
-  const { toast } = useToast();
-  const navigate = useNavigate();
+  const { toast } = useToast()
+  const router = useRouter()
+  const [state, formAction, isPending] = useActionState(signupAction, null)
 
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username.trim() || !email.trim() || !password.trim()) {
+  useEffect(() => {
+    if (state?.error) {
       toast({
-        title: 'Error',
-        description: 'Please fill in all fields',
+        title: 'Registration Failed',
+        description: state.error,
         variant: 'destructive',
-      });
-      return;
-    }
-
-    if (password.length < 6) {
-      toast({
-        title: 'Error',
-        description: 'Password must be at least 6 characters long',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await register(username, email, password);
+      })
+    } else if (state?.success) {
       toast({
         title: 'Registration Successful!',
         description: 'Account created. Please log in with your credentials.',
-      });
-      navigate('/login');
-    } catch (err: any) {
-      toast({
-        title: 'Registration Failed',
-        description: err.message || 'An error occurred during registration',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
+      })
+      router.push('/login')
     }
-  };
+  }, [state, router, toast])
 
   return (
     <Card className="w-full max-w-[420px] mx-auto rounded-[24px] border-zinc-200 dark:border-slate-800 shadow-2xl bg-white/90 dark:bg-slate-900/90 overflow-hidden backdrop-blur-xl transition-all duration-300">
@@ -68,7 +43,7 @@ export const RegisterForm = () => {
         </CardDescription>
       </CardHeader>
       
-      <form onSubmit={handleSubmit}>
+      <form action={formAction}>
         <CardContent className="px-8 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="username" className="text-zinc-700 dark:text-zinc-300 font-semibold text-[14px]">
@@ -78,11 +53,10 @@ export const RegisterForm = () => {
               <User className="absolute left-3.5 top-3.5 h-5 w-5 text-zinc-400" />
               <Input
                 id="username"
+                name="username"
                 type="text"
                 placeholder="johndoe"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                disabled={loading}
+                disabled={isPending}
                 required
                 className="h-12 pl-11 rounded-xl bg-zinc-50 dark:bg-[#1C1C1E] border-zinc-200 dark:border-[#2C2C2E] text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500 text-[15px]"
               />
@@ -97,11 +71,10 @@ export const RegisterForm = () => {
               <Mail className="absolute left-3.5 top-3.5 h-5 w-5 text-zinc-400" />
               <Input
                 id="email"
+                name="email"
                 type="email"
                 placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
+                disabled={isPending}
                 required
                 className="h-12 pl-11 rounded-xl bg-zinc-50 dark:bg-[#1C1C1E] border-zinc-200 dark:border-[#2C2C2E] text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500 text-[15px]"
               />
@@ -116,11 +89,10 @@ export const RegisterForm = () => {
               <Lock className="absolute left-3.5 top-3.5 h-5 w-5 text-zinc-400" />
               <Input
                 id="password"
+                name="password"
                 type="password"
                 placeholder="•••••••• (min 6 chars)"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
+                disabled={isPending}
                 required
                 className="h-12 pl-11 rounded-xl bg-zinc-50 dark:bg-[#1C1C1E] border-zinc-200 dark:border-[#2C2C2E] text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500 text-[15px]"
               />
@@ -132,9 +104,9 @@ export const RegisterForm = () => {
           <Button
             type="submit"
             className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold text-[16px] border-0 transition-all duration-200 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-600/35"
-            disabled={loading}
+            disabled={isPending}
           >
-            {loading ? (
+            {isPending ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 Creating Account...
@@ -148,12 +120,12 @@ export const RegisterForm = () => {
 
           <p className="text-[14px] text-center text-zinc-500 dark:text-zinc-400">
             Already have an account?{' '}
-            <Link to="/login" className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
+            <Link href="/login" className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
               Sign In
             </Link>
           </p>
         </CardFooter>
       </form>
     </Card>
-  );
-};
+  )
+}

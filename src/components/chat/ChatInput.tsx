@@ -1,272 +1,163 @@
-import React, { KeyboardEvent, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Send, Paperclip, X, Mic, StopCircle, Flame, Eye, Reply } from 'lucide-react';
-import { useVoiceRecording } from '@/hooks/useVoiceRecording';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+'use client'
+
+import React, { useState, useRef, useEffect } from 'react'
+import { Send, Flame, Paperclip, X, FileText } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 interface ChatInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  onSend: () => void;
-  isDisabled: boolean;
-  onFileSelect: (file: File) => void;
-  selectedFile: File | null;
-  onClearFile: () => void;
-  onVoiceRecordingComplete?: (file: File) => void;
-  isEphemeral?: boolean;
-  onEphemeralToggle?: (enabled: boolean) => void;
-  isOneTimeView?: boolean;
-  onOneTimeViewToggle?: (enabled: boolean) => void;
-  replyingTo?: {
-    _id: string;
-    content: string;
-    sender: {
-      username: string;
-      avatar_url: string | null;
-    };
-  } | null;
-  onCancelReply?: () => void;
+  onSend: (content: string, options?: { isEphemeral?: boolean; file?: File | null }) => void
+  onTyping: (isTyping: boolean) => void
+  isDisabled?: boolean
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
-  value,
-  onChange,
   onSend,
-  isDisabled,
-  onFileSelect,
-  selectedFile,
-  onClearFile,
-  onVoiceRecordingComplete,
-  isEphemeral = false,
-  onEphemeralToggle,
-  isOneTimeView = false,
-  onOneTimeViewToggle,
-  replyingTo,
-  onCancelReply,
+  onTyping,
+  isDisabled = false,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { isRecording, recordingTime, startRecording, stopRecording, cancelRecording } = useVoiceRecording();
+  const [content, setContent] = useState('')
+  const [isEphemeral, setIsEphemeral] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isTypingRef = useRef(false)
 
-  const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if ((value.trim() || selectedFile) && !isDisabled) {
-        onSend();
-      }
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault()
+    if ((!content.trim() && !selectedFile) || isDisabled) return
+
+    onSend(content.trim(), { isEphemeral, file: selectedFile })
+    setContent('')
+    setSelectedFile(null)
+    
+    // Clear typing indicator
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
     }
-  };
+    isTypingRef.current = false
+    onTyping(false)
+  }
 
-  const handleFileClick = () => {
-    fileInputRef.current?.click();
-  };
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setContent(e.target.value)
+
+    if (!isTypingRef.current) {
+      isTypingRef.current = true
+      onTyping(true)
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false
+      onTyping(false)
+    }, 2000)
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files?.[0]
     if (file) {
-      onFileSelect(file);
+      setSelectedFile(file)
     }
-  };
+  }
 
-  const handleVoiceRecord = async () => {
-    if (isRecording) {
-      const recording = await stopRecording();
-      if (recording && onVoiceRecordingComplete) {
-        const file = new File([recording.blob], `voice-${Date.now()}.webm`, {
-          type: 'audio/webm;codecs=opus',
-        });
-        onVoiceRecordingComplete(file);
+  const handleRemoveFile = () => {
+    setSelectedFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
       }
-    } else {
-      startRecording();
     }
-  };
-
-  const formatRecordingTime = (ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
-
-  const isImage = selectedFile && selectedFile.type.startsWith('image/');
-  const isVideo = selectedFile && selectedFile.type.startsWith('video/');
-  const previewUrl = selectedFile ? URL.createObjectURL(selectedFile) : null;
+  }, [])
 
   return (
-    <div className="p-4 border-t border-white/40 dark:border-slate-700/50 bg-white/40 dark:bg-slate-800/40 backdrop-blur-xl">
-      {isRecording && (
-        <div className="mb-2 p-3 bg-red-50 text-red-700 border border-red-100 rounded-2xl flex items-center gap-3">
-          <div className="flex-1 flex items-center gap-2">
-            <div className="h-2.5 w-2.5 bg-red-600 rounded-full animate-pulse" />
-            <span className="text-xs font-semibold">Recording: {formatRecordingTime(recordingTime)}</span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={cancelRecording}
-            className="text-red-700 hover:bg-red-100/50 rounded-xl"
-          >
-            Cancel
-          </Button>
-        </div>
-      )}
-      
-      {replyingTo && (
-        <div className="mb-3 p-3 bg-[#9AC68A]/10 dark:bg-[#4ADE80]/10 border border-[#9AC68A]/20 dark:border-[#4ADE80]/20 rounded-2xl">
-          <div className="flex items-start gap-2">
-            <Reply className="h-4 w-4 text-[#9AC68A] dark:text-[#4ADE80] mt-0.5 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <Avatar className="h-5 w-5">
-                  <AvatarImage src={replyingTo.sender.avatar_url || undefined} />
-                  <AvatarFallback className="text-[10px] bg-[#9AC68A] dark:bg-[#4ADE80] text-white dark:text-slate-950">
-                    {replyingTo.sender.username.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-xs font-semibold text-[#9AC68A] dark:text-[#4ADE80]">
-                  Replying to {replyingTo.sender.username}
-                </span>
-              </div>
-              <p className="text-xs text-gray-600 dark:text-gray-300 truncate">
-                {replyingTo.content}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onCancelReply}
-              className="h-6 w-6 p-0 hover:bg-[#9AC68A]/20 dark:hover:bg-[#4ADE80]/20 rounded-lg"
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      )}
-      
+    <form onSubmit={handleSend} className="p-4 border-t border-black/5 dark:border-white/5 bg-slate-50 dark:bg-slate-900/60 backdrop-blur-md flex flex-col gap-2">
+      {/* File attachment preview card */}
       {selectedFile && (
-        <div className="mb-3 p-3 bg-[#F4F7F6]/80 border border-[#1A2421]/5 rounded-2xl space-y-2">
-          {isImage && previewUrl && (
-            <div className="relative max-w-xs rounded-xl overflow-hidden border border-[#1A2421]/10">
-              <img 
-                src={previewUrl} 
-                alt="Preview" 
-                className="max-h-32 object-cover"
-              />
+        <div className="flex items-center justify-between p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl max-w-sm border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
+          <div className="flex items-center gap-2 truncate">
+            <FileText className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+            <div className="flex flex-col truncate">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{selectedFile.name}</span>
+              <span className="text-[10px] text-slate-400">{(selectedFile.size / 1024).toFixed(1)} KB</span>
             </div>
-          )}
-          {isVideo && previewUrl && (
-            <div className="relative max-w-xs rounded-xl overflow-hidden border border-[#1A2421]/10 bg-black/5">
-              <video 
-                src={previewUrl} 
-                className="max-h-32 object-cover"
-                controls
-              />
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <Paperclip className="h-4 w-4 text-[#1A2421]/50" />
-            <span className="text-xs font-semibold flex-1 truncate text-[#0C1412]">{selectedFile.name}</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClearFile}
-              className="h-7 w-7 p-0 hover:bg-[#1A2421]/5 rounded-xl"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleRemoveFile}
+            className="h-6 w-6 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700"
+          >
+            <X className="w-4 h-4 text-slate-500" />
+          </Button>
         </div>
       )}
 
-      {/* Input row */}
-      <div className="flex gap-2 items-end">
+      <div className="flex items-center gap-3">
+        {/* File input */}
         <input
-          ref={fileInputRef}
           type="file"
+          ref={fileInputRef}
           onChange={handleFileChange}
+          disabled={isDisabled}
           className="hidden"
-          accept="image/*,video/*,.pdf,.doc,.docx,.txt"
         />
-        
         <Button
-          variant="outline"
+          type="button"
+          variant="ghost"
           size="icon"
-          onClick={handleFileClick}
-          disabled={isDisabled || isRecording}
-          className="shrink-0 h-12 w-12 rounded-[20px] border-white/60 dark:border-slate-700/50 bg-white/50 dark:bg-slate-900/50 hover:bg-white/80 dark:hover:bg-slate-800/80 text-gray-500 dark:text-gray-400 hover:text-[#9AC68A] dark:hover:text-[#4ADE80] shadow-sm transition-all duration-200"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isDisabled}
+          className="h-11 w-11 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
         >
-          <Paperclip className="h-5 w-5" />
+          <Paperclip className="w-5 h-5" />
         </Button>
-        
-        <Textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKeyPress}
-          placeholder={isRecording ? "Recording vocal..." : "Write a message..."}
-          className="min-h-[48px] max-h-[120px] resize-none rounded-[20px] py-3 px-5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 bg-white/50 dark:bg-slate-900/50 border border-white/60 dark:border-slate-700/50 focus-visible:ring-1 focus-visible:ring-[#9AC68A] dark:focus-visible:ring-[#4ADE80] focus-visible:ring-offset-0 flex-1 scrollbar-thin shadow-sm transition-colors"
-          disabled={isDisabled || isRecording}
+
+        <Input
+          type="text"
+          value={content}
+          onChange={handleInputChange}
+          placeholder="Type a message..."
+          disabled={isDisabled}
+          className="flex-1 h-11 rounded-xl bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-sm focus-visible:ring-emerald-500 focus-visible:ring-1"
         />
 
-        {/* Snapchat ephemeral messages mode switch */}
-        {onEphemeralToggle && (
-          <div className="flex flex-col items-center gap-1 shrink-0 px-1 pb-1">
-            <Label htmlFor="ephemeral-mode" className="cursor-pointer text-[9px] uppercase tracking-wider font-bold text-[#1A2421]/50 flex items-center gap-0.5">
-              <Flame className={`w-3.5 h-3.5 ${isEphemeral ? "text-orange-500 fill-current" : ""}`} />
-              Melt
-            </Label>
-            <Switch
-              id="ephemeral-mode"
-              checked={isEphemeral}
-              onCheckedChange={onEphemeralToggle}
-              className="scale-90"
-            />
-          </div>
-        )}
-        
-        {/* One Time View mode switch */}
-        {onOneTimeViewToggle && selectedFile && isImage && (
-          <div className="flex flex-col items-center gap-1 shrink-0 px-1 pb-1">
-            <Label htmlFor="one-time-mode" className="cursor-pointer text-[9px] uppercase tracking-wider font-bold text-[#1A2421]/50 flex items-center gap-0.5">
-              <Eye className={`w-3.5 h-3.5 ${isOneTimeView ? "text-blue-500 fill-current" : ""}`} />
-              1x View
-            </Label>
-            <Switch
-              id="one-time-mode"
-              checked={isOneTimeView}
-              onCheckedChange={onOneTimeViewToggle}
-              className="scale-90"
-            />
-          </div>
-        )}
-        
-        {!value.trim() && !selectedFile ? (
-          <Button
-            size="icon"
-            onClick={handleVoiceRecord}
-            disabled={isDisabled}
-            className={`shrink-0 h-12 w-12 rounded-full shadow-md transition-all duration-300 ${
-              isRecording 
-                ? "bg-red-600 hover:bg-red-700 text-white" 
-                : "bg-[#9AC68A] dark:bg-[#4ADE80] hover:bg-[#8AB67A] dark:hover:bg-[#22C55E] text-white dark:text-slate-950"
-            }`}
-          >
-            {isRecording ? <StopCircle className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-          </Button>
-        ) : (
-          <Button
-            size="icon"
-            onClick={onSend}
-            disabled={(!value.trim() && !selectedFile) || isDisabled}
-            className="shrink-0 h-12 w-12 rounded-full bg-[#9AC68A] dark:bg-[#4ADE80] hover:bg-[#8AB67A] dark:hover:bg-[#22C55E] text-white dark:text-slate-950 shadow-md transition-transform duration-200 active:scale-95"
-          >
-            <Send className="h-5 w-5" />
-          </Button>
-        )}
+        {/* Ephemeral Toggler */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsEphemeral(!isEphemeral)}
+          className={`h-11 w-11 rounded-xl transition-colors border ${
+            isEphemeral
+              ? 'bg-amber-500/10 border-amber-500 text-amber-500 hover:bg-amber-500/20 hover:text-amber-600'
+              : 'border-slate-200 dark:border-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+          }`}
+        >
+          <Flame className="w-5 h-5" />
+        </Button>
+
+        {/* Submit */}
+        <Button
+          type="submit"
+          disabled={(!content.trim() && !selectedFile) || isDisabled}
+          className="h-11 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm shadow-md shadow-emerald-500/15"
+        >
+          <Send className="w-4 h-4 mr-1.5" />
+          Send
+        </Button>
       </div>
-    </div>
-  );
-};
-export default ChatInput;
+    </form>
+  )
+}
+export default ChatInput

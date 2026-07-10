@@ -1,51 +1,37 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Loader2, Lock, Mail, ArrowRight } from 'lucide-react';
+'use client'
+
+import React, { useActionState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { loginAction } from '@/actions/auth'
+import { useToast } from '@/hooks/use-toast'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Loader2, Lock, Mail, ArrowRight } from 'lucide-react'
 
 export const LoginForm = () => {
-  const { login } = useAuth();
-  const { toast } = useToast();
-  const navigate = useNavigate();
-  
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const { toast } = useToast()
+  const router = useRouter()
+  const [state, formAction, isPending] = useActionState(loginAction, null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || !password.trim()) {
+  useEffect(() => {
+    if (state?.error) {
       toast({
-        title: 'Error',
-        description: 'Please enter both email and password',
+        title: 'Authentication Failed',
+        description: state.error,
         variant: 'destructive',
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await login(email, password);
+      })
+    } else if (state?.success) {
       toast({
         title: 'Welcome Back!',
         description: 'Successfully signed in.',
-      });
-      navigate('/chat');
-    } catch (err: any) {
-      toast({
-        title: 'Authentication Failed',
-        description: err.message || 'Invalid email or password',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
+      })
+      router.push('/chat')
+      router.refresh()
     }
-  };
+  }, [state, router, toast])
 
   return (
     <Card className="w-full max-w-[420px] mx-auto rounded-[24px] border-zinc-200 dark:border-slate-800 shadow-2xl bg-white/90 dark:bg-slate-900/90 overflow-hidden backdrop-blur-xl transition-all duration-300">
@@ -58,7 +44,7 @@ export const LoginForm = () => {
         </CardDescription>
       </CardHeader>
       
-      <form onSubmit={handleSubmit}>
+      <form action={formAction}>
         <CardContent className="px-8 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email" className="text-zinc-700 dark:text-zinc-300 font-semibold text-[14px]">
@@ -68,11 +54,10 @@ export const LoginForm = () => {
               <Mail className="absolute left-3.5 top-3.5 h-5 w-5 text-zinc-400" />
               <Input
                 id="email"
+                name="email"
                 type="email"
                 placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
+                disabled={isPending}
                 required
                 className="h-12 pl-11 rounded-xl bg-zinc-50 dark:bg-[#1C1C1E] border-zinc-200 dark:border-[#2C2C2E] text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500 text-[15px]"
               />
@@ -84,7 +69,7 @@ export const LoginForm = () => {
               <Label htmlFor="password" className="text-zinc-700 dark:text-zinc-300 font-semibold text-[14px]">
                 Password
               </Label>
-              <Link to="/forgot-password" className="text-[12px] text-emerald-600 dark:text-emerald-400 hover:underline">
+              <Link href="/forgot-password" className="text-[12px] text-emerald-600 dark:text-emerald-400 hover:underline">
                 Forgot password?
               </Link>
             </div>
@@ -92,11 +77,10 @@ export const LoginForm = () => {
               <Lock className="absolute left-3.5 top-3.5 h-5 w-5 text-zinc-400" />
               <Input
                 id="password"
+                name="password"
                 type="password"
                 placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
+                disabled={isPending}
                 required
                 className="h-12 pl-11 rounded-xl bg-zinc-50 dark:bg-[#1C1C1E] border-zinc-200 dark:border-[#2C2C2E] text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-1 focus-visible:ring-emerald-500 text-[15px]"
               />
@@ -108,9 +92,9 @@ export const LoginForm = () => {
           <Button
             type="submit"
             className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold text-[16px] border-0 transition-all duration-200 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-600/35"
-            disabled={loading}
+            disabled={isPending}
           >
-            {loading ? (
+            {isPending ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 Signing In...
@@ -124,12 +108,12 @@ export const LoginForm = () => {
 
           <p className="text-[14px] text-center text-zinc-500 dark:text-zinc-400">
             Don't have an account?{' '}
-            <Link to="/register" className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
+            <Link href="/register" className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
               Create account
             </Link>
           </p>
         </CardFooter>
       </form>
     </Card>
-  );
-};
+  )
+}

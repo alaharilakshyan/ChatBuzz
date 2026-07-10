@@ -43,8 +43,8 @@ export default async function WorkspaceLayout({
     .is('deleted_at', null)
 
   const workspaces: Workspace[] = (memberships
-    ?.map((m) => m.workspaces)
-    .filter((ws) => ws !== null && ws.deleted_at === null) as Workspace[]) || []
+    ?.map((m: any) => m.workspaces)
+    .filter((ws: any) => ws !== null && ws.deleted_at === null) as unknown as Workspace[]) || []
 
   // 4. Fetch channels if we are inside a workspace
   let channels: Channel[] = []

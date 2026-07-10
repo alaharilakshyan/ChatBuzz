@@ -167,7 +167,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Link href="/settings">
+              <Link href="/profile">
                 <Button
                   variant="ghost"
                   size="icon"

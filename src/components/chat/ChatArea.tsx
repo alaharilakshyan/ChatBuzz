@@ -8,6 +8,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { sendMessageAction } from '@/actions/chat'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 interface ChatAreaProps {
   initialMessages: Message[]
@@ -28,10 +30,28 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 }) => {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [typingUsers, setTypingUsers] = useState<string[]>([])
+  const [viewingUsers, setViewingUsers] = useState<{ id: string; username: string; avatarUrl: string | null; isTyping: boolean }[]>([])
   const [isUploading, setIsUploading] = useState(false)
+  const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null)
+  
   const scrollRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
   const supabase = createClient()
+
+  // Fetch custom background settings on mount
+  useEffect(() => {
+    const fetchBackground = async () => {
+      const { data } = await supabase
+        .from('user_settings')
+        .select('chat_background_url')
+        .eq('user_id', currentUser.id)
+        .maybeSingle()
+      if (data?.chat_background_url) {
+        setBackgroundUrl(data.chat_background_url)
+      }
+    }
+    fetchBackground()
+  }, [supabase, currentUser.id])
 
   // Reset messages state when active room changes
   useEffect(() => {
@@ -101,8 +121,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   username: profile.username,
                   avatar_url: profile.avatar_url,
                 }
-              : undefined,
-            attachments: (dbAttachments || []) as any[],
+              : { username: 'Unknown User', avatar_url: null },
+            attachments: (dbAttachments as any) || [],
           }
 
           setMessages((prev) => {
@@ -121,23 +141,36 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       .on('presence', { event: 'sync' }, () => {
         const presenceState = presenceChannel.presenceState()
         const typers: string[] = []
+        const viewersMap: Record<string, { id: string; username: string; avatarUrl: string | null; isTyping: boolean }> = {}
 
         Object.keys(presenceState).forEach((key) => {
           const users = presenceState[key] as any[]
           users.forEach((u) => {
+            // Typing tracker
             if (u.is_typing && u.user_id !== currentUser.id) {
               typers.push(u.username)
+            }
+            // Viewing tracker: exclude self
+            if (u.user_id !== currentUser.id) {
+              viewersMap[u.user_id] = {
+                id: u.user_id,
+                username: u.username,
+                avatarUrl: u.avatar_url || null,
+                isTyping: !!u.is_typing
+              }
             }
           })
         })
 
-        setTypingUsers(typers)
+        setTypingUsers([...new Set(typers)])
+        setViewingUsers(Object.values(viewersMap))
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           await presenceChannel.track({
             user_id: currentUser.id,
             username: currentUser.username,
+            avatar_url: currentUser.avatar_url,
             is_typing: false,
           })
         }
@@ -221,14 +254,27 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     await presenceChan.track({
       user_id: currentUser.id,
       username: currentUser.username,
+      avatar_url: currentUser.avatar_url,
       is_typing: isTyping,
     })
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-950">
+    <div
+      className="flex-1 flex flex-col min-h-0 relative bg-white dark:bg-slate-950"
+      style={{
+        backgroundImage: backgroundUrl ? `url("${backgroundUrl}")` : undefined,
+        backgroundSize: backgroundUrl ? 'cover' : undefined,
+        backgroundPosition: backgroundUrl ? 'center' : undefined,
+      }}
+    >
+      {/* Dark & blur overlay for readability */}
+      {backgroundUrl && (
+        <div className="absolute inset-0 bg-white/10 dark:bg-black/50 backdrop-blur-[0.5px] pointer-events-none z-0" />
+      )}
+
       {/* Scrollable messages area */}
-      <ScrollArea className="flex-1 px-6 py-4">
+      <ScrollArea className="flex-1 px-6 py-4 z-10">
         <div className="flex flex-col min-h-full justify-end">
           {messages.map((msg) => (
             <MessageBubble
@@ -258,6 +304,51 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           <div ref={scrollRef} />
         </div>
       </ScrollArea>
+
+      {/* Snapchat-style Active Viewers Avatars row */}
+      <div className="absolute bottom-[80px] right-6 z-30 flex items-center gap-1.5 pointer-events-none">
+        <AnimatePresence>
+          {viewingUsers.map((viewer) => (
+            <motion.div
+              key={viewer.id}
+              initial={{ y: 50, opacity: 0, scale: 0.8 }}
+              animate={{
+                y: 0,
+                opacity: 1,
+                scale: 1,
+                transition: { type: 'spring', stiffness: 300, damping: 20 }
+              }}
+              exit={{ y: 30, opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
+              className="pointer-events-auto relative group"
+            >
+              {/* Hover Tooltip */}
+              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-900/90 dark:bg-slate-950/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow border border-white/5">
+                {viewer.username} {viewer.isTyping ? 'is typing...' : 'is here'}
+              </div>
+
+              {/* Avatar shell with typing bounce animation loop */}
+              <motion.div
+                animate={
+                  viewer.isTyping
+                    ? { y: [0, -8, 0], transition: { repeat: Infinity, duration: 0.6, ease: 'easeInOut' } }
+                    : { y: 0 }
+                }
+                className="relative"
+              >
+                <Avatar className="h-8 w-8 border-2 border-white dark:border-slate-950 shadow-md ring-2 ring-emerald-500/20">
+                  <AvatarImage src={viewer.avatarUrl || undefined} className="object-cover" />
+                  <AvatarFallback className="bg-emerald-500 text-white text-[10px] font-bold">
+                    {viewer.username.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                
+                {/* Active green status indicator dot */}
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-950 rounded-full" />
+              </motion.div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
       {/* Input panel */}
       <ChatInput onSend={handleSendMessage} onTyping={handleTyping} isDisabled={isUploading} />

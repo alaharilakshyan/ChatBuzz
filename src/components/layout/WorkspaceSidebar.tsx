@@ -3,13 +3,26 @@
 import React, { useState, useTransition, useRef, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Home, Plus, Bell, Settings, User, LogOut, Sun, Moon, Users, Phone, ShieldAlert, Monitor, Loader2 } from 'lucide-react'
+import { Home, Plus, Bell, Settings, User, LogOut, Sun, Moon, Users, Phone, Loader2, Navigation } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useTheme } from 'next-themes'
 import { signOutAction } from '@/actions/auth'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useToast } from '@/hooks/use-toast'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { createWorkspaceAction } from '@/actions/workspaces'
 
 export interface Workspace {
   id: string
@@ -26,17 +39,26 @@ interface WorkspaceSidebarProps {
     username: string
     avatar_url: string | null
   } | null
+  density?: string
 }
 
 export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   workspaces,
   user,
+  density = 'comfortable',
 }) => {
   const { theme, setTheme } = useTheme()
   const router = useRouter()
   const pathname = usePathname()
+  const { toast } = useToast()
   const [isPending, startTransition] = useTransition()
+  
+  // Custom states
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [newWorkspaceName, setNewWorkspaceName] = useState('')
+  const [isCreatingWS, setIsCreatingWS] = useState(false)
+  
   const menuRef = useRef<HTMLDivElement>(null)
 
   const handleLogout = () => {
@@ -46,6 +68,33 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
       router.push('/login')
       router.refresh()
     })
+  }
+
+  // Handle Workspace creation submit
+  const handleCreateWorkspace = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newWorkspaceName.trim()) return
+
+    setIsCreatingWS(true)
+    const res = await createWorkspaceAction(newWorkspaceName)
+    setIsCreatingWS(false)
+
+    if (res?.error) {
+      toast({
+        title: 'Failed to create workspace',
+        description: res.error,
+        variant: 'destructive',
+      })
+    } else {
+      toast({
+        title: 'Workspace Created',
+        description: `Workspace "${newWorkspaceName}" created successfully!`,
+      })
+      setNewWorkspaceName('')
+      setIsCreateOpen(false)
+      router.push(`/chat/${res.workspaceId}`)
+      router.refresh()
+    }
   }
 
   // Close profile menu if clicked outside
@@ -63,40 +112,52 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const isHomeActive = pathname === '/chat' || pathname === '/chat/home'
   const isFriendsActive = pathname === '/friends'
   const isCallsActive = pathname === '/calls'
-  const isSettingsActive = pathname === '/settings'
   const isProfileActive = pathname === '/profile'
+  const isMapActive = pathname === '/map'
+
+  // Density spacing helpers
+  const isCompact = density === 'compact'
+  const btnSizeClass = isCompact ? 'h-10 w-10 rounded-[14px]' : 'h-12 w-12 rounded-[20px]'
+  const logoSizeClass = isCompact ? 'w-10 h-10 rounded-[14px]' : 'w-12 h-12 rounded-[20px]'
+  const avatarSizeClass = isCompact ? 'h-10 w-10' : 'h-12 w-12'
 
   return (
     <TooltipProvider>
-      <div className="my-4 ml-4 w-[72px] py-6 bg-white/70 dark:bg-slate-900/60 backdrop-blur-2xl border border-slate-200/50 dark:border-slate-800/40 rounded-[28px] shadow-2xl flex-shrink-0 h-[calc(100vh-32px)] transition-all duration-300 flex flex-col items-center justify-between z-40">
+      <div className={`transition-all duration-300 bg-white/70 dark:bg-slate-900/60 backdrop-blur-2xl border border-slate-200/50 dark:border-slate-800/40 shadow-2xl flex-shrink-0 flex flex-col items-center justify-between z-40 ${
+        isCompact
+          ? 'my-2 ml-2 w-[64px] py-4 h-[calc(100vh-16px)] rounded-[20px]'
+          : 'my-4 ml-4 w-[72px] py-6 h-[calc(100vh-32px)] rounded-[28px]'
+      }`}>
         
         {/* Top: Logo & Main Navigation */}
-        <div className="flex flex-col items-center gap-6 w-full">
+        <div className="flex flex-col items-center gap-5 w-full">
           {/* CB Logo */}
-          <Link href="/chat" className="w-12 h-12 rounded-[20px] bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/25 transition-all duration-300 hover:scale-105 hover:shadow-emerald-500/40 select-none cursor-pointer">
-            <span className="text-white dark:text-slate-950 font-black text-lg tracking-tight">CB</span>
-          </Link>
+          <Button asChild variant="ghost" className={`${logoSizeClass} bg-emerald-500 hover:bg-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/25 transition-all duration-300 hover:scale-105 hover:shadow-emerald-500/40 select-none cursor-pointer`}>
+            <Link href="/chat">
+              <span className="text-white dark:text-slate-950 font-black text-lg tracking-tight">CB</span>
+            </Link>
+          </Button>
 
-          <div className="w-8 h-[1px] bg-slate-200 dark:bg-slate-800/60 my-1" />
+          <div className="w-8 h-[1px] bg-slate-200 dark:bg-slate-800/60 my-2" />
 
           {/* Navigation Action Buttons */}
           <div className="flex flex-col items-center gap-4 w-full px-2">
             {/* Home / DMs */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href="/chat">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-12 w-12 rounded-[20px] transition-all duration-300 hover:scale-105 ${
-                      isHomeActive
-                        ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
-                        : 'bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
+                <Button
+                  asChild
+                  variant="ghost"
+                  className={`${btnSizeClass} transition-all duration-300 hover:scale-105 flex items-center justify-center ${
+                    isHomeActive
+                      ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
+                      : 'bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Link href="/chat">
                     <Home className="h-5 w-5" strokeWidth={2} />
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </TooltipTrigger>
               <TooltipContent side="right">
                 <p className="font-semibold text-xs">Direct Messages</p>
@@ -106,19 +167,19 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             {/* Friends list shortcut */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href="/friends">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-12 w-12 rounded-[20px] transition-all duration-300 hover:scale-105 ${
-                      isFriendsActive
-                        ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
-                        : 'bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
+                <Button
+                  asChild
+                  variant="ghost"
+                  className={`${btnSizeClass} transition-all duration-300 hover:scale-105 flex items-center justify-center ${
+                    isFriendsActive
+                      ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
+                      : 'bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Link href="/friends">
                     <Users className="h-5 w-5" strokeWidth={2} />
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </TooltipTrigger>
               <TooltipContent side="right">
                 <p className="font-semibold text-xs">Friends</p>
@@ -128,22 +189,44 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             {/* Calls list shortcut */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href="/calls">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-12 w-12 rounded-[20px] transition-all duration-300 hover:scale-105 ${
-                      isCallsActive
-                        ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
-                        : 'bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
+                <Button
+                  asChild
+                  variant="ghost"
+                  className={`${btnSizeClass} transition-all duration-300 hover:scale-105 flex items-center justify-center ${
+                    isCallsActive
+                      ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
+                      : 'bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Link href="/calls">
                     <Phone className="h-5 w-5" strokeWidth={2} />
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </TooltipTrigger>
               <TooltipContent side="right">
                 <p className="font-semibold text-xs">Calls</p>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Map shortcut */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  asChild
+                  variant="ghost"
+                  className={`${btnSizeClass} transition-all duration-300 hover:scale-105 flex items-center justify-center ${
+                    isMapActive
+                      ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
+                      : 'bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Link href="/map">
+                    <Navigation className="h-5 w-5" strokeWidth={2} />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p className="font-semibold text-xs">BuzzMap</p>
               </TooltipContent>
             </Tooltip>
 
@@ -153,10 +236,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-12 w-12 rounded-[20px] bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:scale-105 transition-all duration-300 relative"
+                  className={`${btnSizeClass} bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:scale-105 transition-all duration-300 relative flex items-center justify-center`}
                 >
                   <Bell className="h-5 w-5" strokeWidth={2} />
-                  <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">
@@ -165,10 +248,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             </Tooltip>
           </div>
 
-          <div className="w-8 h-[1px] bg-slate-200 dark:bg-slate-800/60 my-1" />
+          <div className="w-8 h-[1px] bg-slate-200 dark:bg-slate-800/60 my-2" />
 
           {/* Workspaces list */}
-          <div className="flex flex-col items-center gap-3 w-full max-h-[300px] overflow-y-auto scrollbar-none px-2 py-1">
+          <div className="flex flex-col items-center gap-4 w-full max-h-[250px] overflow-y-auto scrollbar-none px-2 py-1">
             {workspaces.map((ws) => {
               const isActive = pathname === `/chat/${ws.id}`
               const initials = ws.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
@@ -176,17 +259,19 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               return (
                 <Tooltip key={ws.id}>
                   <TooltipTrigger asChild>
-                    <Link href={`/chat/${ws.id}`}>
-                      <button
-                        className={`h-12 w-12 rounded-[20px] font-bold text-sm flex items-center justify-center transition-all duration-300 hover:scale-105 ${
-                          isActive
-                            ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
-                            : 'bg-white/50 dark:bg-slate-850/40 border border-slate-250 dark:border-slate-800 hover:border-emerald-500 text-slate-650 dark:text-slate-350 hover:text-emerald-500'
-                        }`}
-                      >
+                    <Button
+                      asChild
+                      variant="ghost"
+                      className={`${btnSizeClass} font-bold text-sm flex items-center justify-center transition-all duration-300 hover:scale-105 ${
+                        isActive
+                          ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
+                          : 'bg-white/50 dark:bg-slate-850/40 border border-slate-250 dark:border-slate-800 hover:border-emerald-500 text-slate-650 dark:text-slate-350 hover:text-emerald-500'
+                      }`}
+                    >
+                      <Link href={`/chat/${ws.id}`}>
                         {initials}
-                      </button>
-                    </Link>
+                      </Link>
+                    </Button>
                   </TooltipTrigger>
                   <TooltipContent side="right">
                     <p className="font-semibold text-xs">{ws.name}</p>
@@ -195,26 +280,88 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               )
             })}
 
-            {/* Add Workspace Button */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-12 w-12 rounded-[20px] border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-500 hover:scale-105 transition-all duration-300"
-                >
-                  <Plus className="h-5 w-5" strokeWidth={2} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p className="font-semibold text-xs">Create Workspace</p>
-              </TooltipContent>
-            </Tooltip>
+            {/* Add Workspace Button & Dialog */}
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className={`${btnSizeClass} border-dashed border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-500 hover:scale-105 transition-all duration-300 flex items-center justify-center`}
+                    >
+                      <Plus className="h-5 w-5" strokeWidth={2} />
+                    </Button>
+                  </DialogTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p className="font-semibold text-xs">Create Workspace</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <DialogContent className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <form onSubmit={handleCreateWorkspace}>
+                  <DialogHeader className="space-y-1.5 mb-4">
+                    <DialogTitle className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent">
+                      Create a Group Workspace
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
+                      Workspaces let you organize channels and secure chats for your team or group.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="ws-name" className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Workspace Name
+                      </Label>
+                      <Input
+                        id="ws-name"
+                        type="text"
+                        placeholder="e.g. Project Chat, Study Group"
+                        value={newWorkspaceName}
+                        onChange={(e) => setNewWorkspaceName(e.target.value)}
+                        disabled={isCreatingWS}
+                        required
+                        className="h-11 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 text-sm focus-visible:ring-emerald-500 focus-visible:ring-1"
+                      />
+                    </div>
+                  </div>
+
+                  <DialogFooter className="mt-6 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isCreatingWS}
+                      className="rounded-xl font-bold"
+                      onClick={() => setIsCreateOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={isCreatingWS || !newWorkspaceName.trim()}
+                      className="rounded-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-md text-white"
+                    >
+                      {isCreatingWS ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          Creating...
+                        </>
+                      ) : (
+                        'Create'
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
           </div>
         </div>
 
-        {/* Bottom: Settings, Theme, Profile */}
-        <div className="flex flex-col items-center gap-4 w-full px-2 relative" ref={menuRef}>
+        {/* Bottom: Theme, Profile */}
+        <div className="flex flex-col items-center gap-5 w-full px-2 relative" ref={menuRef}>
           {/* Light/Dark Toggle */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -222,7 +369,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                 variant="ghost"
                 size="icon"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="h-12 w-12 rounded-[20px] bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:scale-105 transition-all duration-300"
+                className={`${btnSizeClass} bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:scale-105 transition-all duration-300 flex items-center justify-center`}
               >
                 <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" strokeWidth={2} />
                 <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" strokeWidth={2} />
@@ -233,44 +380,21 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             </TooltipContent>
           </Tooltip>
 
-          {/* Settings Dashboard Link */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link href="/settings">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-12 w-12 rounded-[20px] transition-all duration-300 hover:scale-105 ${
-                    isSettingsActive
-                      ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
-                      : 'bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Settings className="h-5 w-5" strokeWidth={2} />
-                </Button>
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p className="font-semibold text-xs">Settings</p>
-            </TooltipContent>
-          </Tooltip>
-
           {/* User Profile Avatar (Triggers custom popup menu) */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="focus:outline-none select-none relative"
+            className="focus:outline-none select-none relative flex items-center justify-center"
             aria-label="User profile menu"
           >
-            <Avatar className={`h-12 w-12 ring-offset-2 dark:ring-offset-slate-900 transition-all duration-300 hover:scale-105 cursor-pointer ${
+            <Avatar className={`${avatarSizeClass} ring-offset-2 dark:ring-offset-slate-900 transition-all duration-300 hover:scale-105 cursor-pointer ${
               isProfileActive || isMenuOpen ? 'ring-2 ring-emerald-500' : 'ring-2 ring-emerald-500/20'
             }`}>
               <AvatarImage src={user?.avatar_url || undefined} alt={user?.username} />
-              <AvatarFallback className="bg-emerald-500 text-white dark:text-slate-950 text-lg font-bold">
+              <AvatarFallback className="bg-emerald-500 text-white dark:text-slate-950 text-lg font-bold flex items-center justify-center">
                 {user?.username ? user.username.charAt(0).toUpperCase() : <User className="w-5 h-5" strokeWidth={2} />}
               </AvatarFallback>
             </Avatar>
             
-            {/* Status dot indicator */}
             <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
           </button>
 

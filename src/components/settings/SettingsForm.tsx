@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useTransition, useEffect } from 'react'
+import React, { useState, useTransition, useEffect, useRef } from 'react'
+import { createClient as createBrowserClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from 'next-themes'
@@ -68,6 +69,8 @@ interface UserSettings {
   online_status_visible: boolean
   message_notifications_enabled: boolean
   sound_enabled: boolean
+  chat_background_url?: string | null
+  ghost_mode_enabled?: boolean
 }
 
 interface SettingsFormProps {
@@ -87,6 +90,63 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
   // Settings States
   const [settings, setSettings] = useState<UserSettings>(initialSettings)
   const [isPending, startTransition] = useTransition()
+
+  const supabase = createBrowserClient()
+  const bgInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingBg, setUploadingBg] = useState(false)
+
+  const handleBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingBg(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Unauthorized')
+
+      const fileExt = file.name.split('.').pop()
+      // Clean and sanitize base filename to prevent path validation issues
+      const cleanBaseName = file.name.replace(/[^a-zA-Z0-9]/g, '_')
+      const fileName = `${user.id}-${Date.now()}-${cleanBaseName}.${fileExt}`
+      const filePath = fileName // Keep it clean at the root of the bucket
+
+      const { data, error: uploadErr } = await supabase.storage
+        .from('backgrounds')
+        .upload(filePath, file, { cacheControl: '3600', upsert: true })
+
+      if (uploadErr) {
+        console.error("❌ Full Storage Upload Error Context:", uploadErr)
+        throw uploadErr
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('backgrounds')
+        .getPublicUrl(filePath)
+
+      await handleToggle('chat_background_url' as any, publicUrl)
+
+      toast({
+        title: 'Background Uploaded',
+        description: 'Your custom chat background has been updated.',
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Upload Failed',
+        description: err.message || 'An error occurred during file upload.',
+        variant: 'destructive',
+      })
+    } finally {
+      setUploadingBg(false)
+    }
+  }
+
+  const handleClearBg = async () => {
+    await handleToggle('chat_background_url' as any, null)
+    toast({
+      title: 'Background Reset',
+      description: 'Custom chat background cleared.',
+    })
+  }
 
   // Account Form States
   const [emailInput, setEmailInput] = useState(userEmail)
@@ -162,6 +222,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
           title: 'Setting Saved',
           description: 'Your preferences have been written successfully.',
         })
+        router.refresh()
       }
     })
   }
@@ -480,6 +541,59 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
                         })}
                       </div>
                     </div>
+
+                    {/* Chat Background selector */}
+                    <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800/40">
+                      <Label className="font-bold text-sm text-slate-700 dark:text-slate-300">Chat Background Image</Label>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                        <div className="relative w-full sm:w-44 h-24 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/55 flex items-center justify-center shadow-inner">
+                          {settings.chat_background_url ? (
+                            <img src={settings.chat_background_url} alt="Chat Background" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Default Theme</span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <input
+                            ref={bgInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleBgUpload}
+                            disabled={uploadingBg || isPending}
+                            className="hidden"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => bgInputRef.current?.click()}
+                            disabled={uploadingBg || isPending}
+                            className="h-10 rounded-xl font-bold text-xs"
+                          >
+                            {uploadingBg ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                                Uploading...
+                              </>
+                            ) : (
+                              'Upload Custom Image'
+                            )}
+                          </Button>
+                          {settings.chat_background_url && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={handleClearBg}
+                              disabled={uploadingBg || isPending}
+                              className="h-9 rounded-xl font-bold text-xs text-red-500 hover:bg-red-500/10 hover:text-red-500"
+                            >
+                              Reset to Default
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
               )}
@@ -520,6 +634,20 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
                       <CustomSwitch
                         checked={settings.read_receipts_enabled}
                         onChange={(checked) => handleToggle('read_receipts_enabled', checked)}
+                        disabled={isPending}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50/50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-slate-800/50">
+                      <div className="space-y-0.5 pr-4">
+                        <Label className="font-bold text-sm text-slate-800 dark:text-slate-200">Ghost Mode 👻</Label>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                          Hide your location marker from friends and disable spatial location sync.
+                        </p>
+                      </div>
+                      <CustomSwitch
+                        checked={settings.ghost_mode_enabled || false}
+                        onChange={(checked) => handleToggle('ghost_mode_enabled', checked)}
                         disabled={isPending}
                       />
                     </div>

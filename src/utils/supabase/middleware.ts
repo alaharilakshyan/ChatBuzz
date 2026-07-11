@@ -41,7 +41,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith('/profile') || 
     path.startsWith('/settings') || 
     path.startsWith('/friends') || 
-    path.startsWith('/calls')
+    path.startsWith('/calls') ||
+    path.startsWith('/map')
   const isAuthPath = path === '/login' || path === '/register' || path === '/forgot-password'
 
   if (!user && isProtectedPath) {

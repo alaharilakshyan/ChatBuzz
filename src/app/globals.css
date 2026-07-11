@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* Configure Tailwind v4 class-based dark mode */
-@variant dark (.dark &);
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --background: #ffffff;
@@ -34,3 +34,37 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Spacing and density utilities */
+.density-compact {
+  --density-padding-y: 0.35rem;
+  --density-padding-x: 0.75rem;
+  --density-gap: 0.35rem;
+  font-size: 13px;
+}
+
+.density-comfortable {
+  --density-padding-y: 0.65rem;
+  --density-padding-x: 1.25rem;
+  --density-gap: 0.75rem;
+  font-size: 14px;
+}
+
+/* Apply density attributes dynamically across layout views */
+.density-compact .chat-message-item {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+
+.density-compact .chat-message-avatar {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.density-compact .chat-channel-item {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+  margin-top: 1px !important;
+  margin-bottom: 1px !important;
+}
+

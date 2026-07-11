@@ -9,6 +9,8 @@ export interface UserSettingsPayload {
   online_status_visible?: boolean
   message_notifications_enabled?: boolean
   sound_enabled?: boolean
+  chat_background_url?: string
+  ghost_mode_enabled?: boolean
 }
 
 export async function updatePreferencesAction(payload: UserSettingsPayload) {
@@ -23,6 +25,8 @@ export async function updatePreferencesAction(payload: UserSettingsPayload) {
     'online_status_visible',
     'message_notifications_enabled',
     'sound_enabled',
+    'chat_background_url',
+    'ghost_mode_enabled',
   ]
 
   const updatePayload: any = {}

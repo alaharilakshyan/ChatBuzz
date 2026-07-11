@@ -1,36 +1,131 @@
 import React from 'react'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Users, ArrowRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/utils/supabase/server'
+import { FriendsDashboard } from '@/components/friends/FriendsDashboard'
 
-export default function FriendsPage() {
+export default async function FriendsPage() {
+  const supabase = createClient()
+
+  // 1. Get logged-in user session
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  // 2. Fetch friendships
+  const { data: friendships } = await supabase
+    .from('friendships')
+    .select('user1_id, user2_id')
+    .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+    .is('deleted_at', null)
+
+  const friendIds = friendships?.map((f) => (f.user1_id === user.id ? f.user2_id : f.user1_id)) || []
+  let friendsList: any[] = []
+  if (friendIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url, user_tag')
+      .in('id', friendIds)
+      .is('deleted_at', null)
+    if (profiles) friendsList = profiles
+  }
+
+  // 3. Fetch pending requests
+  const { data: requests } = await supabase
+    .from('friend_requests')
+    .select('id, requester_id, recipient_id, status, created_at')
+    .or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`)
+    .eq('status', 'pending')
+    .is('deleted_at', null)
+
+  const requestUserIds = requests?.map((r) => (r.requester_id === user.id ? r.recipient_id : r.requester_id)) || []
+  let pendingRequests: any[] = []
+  if (requestUserIds.length > 0 && requests) {
+    const { data: reqProfiles } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url, user_tag')
+      .in('id', requestUserIds)
+      .is('deleted_at', null)
+
+    if (reqProfiles) {
+      pendingRequests = requests.map((r) => {
+        const otherUserId = r.requester_id === user.id ? r.recipient_id : r.requester_id
+        const profile = reqProfiles.find((p) => p.id === otherUserId)
+        return {
+          id: r.id,
+          requester_id: r.requester_id,
+          recipient_id: r.recipient_id,
+          status: r.status,
+          created_at: r.created_at,
+          profile: profile || { id: otherUserId, username: 'Unknown User', avatar_url: null, user_tag: '0000' }
+        }
+      })
+    }
+  }
+
+  // 4. Fetch blocked users
+  const { data: blocks } = await supabase
+    .from('blocks')
+    .select('blocked_id')
+    .eq('blocker_id', user.id)
+    .is('deleted_at', null)
+
+  const blockedIds = blocks?.map((b) => b.blocked_id) || []
+  let blockedList: any[] = []
+  if (blockedIds.length > 0) {
+    const { data: blockedProfiles } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url, user_tag')
+      .in('id', blockedIds)
+      .is('deleted_at', null)
+    if (blockedProfiles) blockedList = blockedProfiles
+  }
+
+  // 5. Fetch current user profile details
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, username, avatar_url')
+    .eq('id', user.id)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  const currentUserProfile = profile || {
+    id: user.id,
+    username: user.email?.split('@')[0] || 'User',
+    avatar_url: null,
+  }
+
+  // 6. Fetch active (unexpired) echoes
+  const { data: echoes } = await supabase
+    .from('echoes')
+    .select('id, user_id, media_url, caption, created_at, expires_at, profiles(username, avatar_url)')
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: true })
+
+  const formattedEchoes = (echoes || []).map((echo: any) => ({
+    id: echo.id,
+    user_id: echo.user_id,
+    media_url: echo.media_url,
+    caption: echo.caption,
+    created_at: echo.created_at,
+    expires_at: echo.expires_at,
+    profiles: {
+      username: echo.profiles?.username || 'Unknown User',
+      avatar_url: echo.profiles?.avatar_url || null,
+    }
+  }))
+
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50/10 dark:bg-slate-950/10">
-      <Card className="w-full max-w-md rounded-[24px] border border-slate-200/50 dark:border-slate-800/50 shadow-xl bg-white/80 dark:bg-slate-900/60 backdrop-blur-md">
-        <CardHeader className="text-center space-y-2 p-8">
-          <div className="mx-auto w-16 h-16 rounded-[20px] bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-500 mb-2">
-            <Users className="w-8 h-8" />
-          </div>
-          <CardTitle className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent">
-            Friends List
-          </CardTitle>
-          <CardDescription className="text-slate-500 dark:text-slate-400">
-            Friend requests, online user statuses, and blockers will live here (Module 5).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-8 pt-0 flex flex-col items-center gap-4">
-          <p className="text-sm text-slate-400 dark:text-slate-500 font-medium text-center">
-            This module placeholder is active and protected by route middleware guards.
-          </p>
-          <Link href="/chat">
-            <Button className="rounded-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-md">
-              Go to Chat Home
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
+    <FriendsDashboard
+      initialFriends={friendsList}
+      initialPending={pendingRequests}
+      initialBlocked={blockedList}
+      userId={user.id}
+      activeEchoes={formattedEchoes}
+      currentUser={currentUserProfile}
+    />
   )
 }

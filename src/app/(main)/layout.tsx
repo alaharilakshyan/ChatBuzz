@@ -42,16 +42,33 @@ export default async function MainLayout({ children }: MainLayoutProps) {
     ?.map((m: any) => m.workspaces)
     .filter((ws: any) => ws !== null && ws.deleted_at === null) as unknown as Workspace[]) || []
 
+  // 4. Fetch user preferences to apply spacing density settings
+  const { data: settings } = await supabase
+    .from('user_settings')
+    .select('density')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  const density = settings?.density || 'comfortable'
+  const isCompact = density === 'compact'
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className={`flex h-screen w-screen overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300 ${
+      isCompact ? 'density-compact' : 'density-comfortable'
+    }`}>
       {/* Detached floating sidebar */}
       <WorkspaceSidebar
         workspaces={workspaces}
-        activeWorkspaceId={null} // We will handle parsing path in client sidebar or pass path
+        activeWorkspaceId={null}
         user={profile}
+        density={density}
       />
       {/* Detached main content container panel */}
-      <div className="flex-1 flex min-w-0 my-4 mr-4 bg-white dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/50 rounded-[28px] overflow-hidden shadow-xl transition-colors duration-300">
+      <div className={`flex-1 flex min-w-0 bg-white dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/50 shadow-xl transition-all duration-300 ${
+        isCompact 
+          ? 'my-2 mr-2 rounded-[20px]' 
+          : 'my-4 mr-4 rounded-[28px]'
+      }`}>
         {children}
       </div>
     </div>

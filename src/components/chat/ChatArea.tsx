@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { generateSmartRepliesAction } from '@/actions/ai'
 
 interface ChatAreaProps {
   initialMessages: Message[]
@@ -33,6 +34,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [viewingUsers, setViewingUsers] = useState<{ id: string; username: string; avatarUrl: string | null; isTyping: boolean }[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null)
+  const [smartReplies, setSmartReplies] = useState<string[]>([])
   
   const scrollRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
@@ -65,6 +67,26 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       scrollRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, typingUsers])
+
+  // Fetch AI suggested smart replies when receiving message from remote peer
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1]
+    if (lastMessage && lastMessage.sender_id !== currentUser.id) {
+      const chatPayload = messages.slice(-5).map((m) => ({
+        sender: m.sender?.username || (m.sender_id === currentUser.id ? 'You' : 'Friend'),
+        content: m.content || '[Attachment]',
+      }))
+      generateSmartRepliesAction(chatPayload)
+        .then((res) => {
+          if (res.suggestions) {
+            setSmartReplies(res.suggestions)
+          }
+        })
+        .catch((err) => console.error('Error fetching smart replies:', err))
+    } else {
+      setSmartReplies([])
+    }
+  }, [messages, currentUser.id])
 
   // Setup Postgres message subscription & Presence typing indicators
   useEffect(() => {
@@ -351,7 +373,16 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       </div>
 
       {/* Input panel */}
-      <ChatInput onSend={handleSendMessage} onTyping={handleTyping} isDisabled={isUploading} />
+      <ChatInput
+        onSend={handleSendMessage}
+        onTyping={handleTyping}
+        isDisabled={isUploading}
+        suggestions={smartReplies}
+        onSelectSuggestion={(replyText) => {
+          handleSendMessage(replyText)
+          setSmartReplies([])
+        }}
+      />
     </div>
   )
 }

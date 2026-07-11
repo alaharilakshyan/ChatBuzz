@@ -9,12 +9,16 @@ interface ChatInputProps {
   onSend: (content: string, options?: { isEphemeral?: boolean; file?: File | null }) => void
   onTyping: (isTyping: boolean) => void
   isDisabled?: boolean
+  suggestions?: string[]
+  onSelectSuggestion?: (text: string) => void
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSend,
   onTyping,
   isDisabled = false,
+  suggestions = [],
+  onSelectSuggestion,
 }) => {
   const [content, setContent] = useState('')
   const [isEphemeral, setIsEphemeral] = useState(false)
@@ -81,6 +85,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <form onSubmit={handleSend} className="p-4 border-t border-black/5 dark:border-white/5 bg-slate-50 dark:bg-slate-900/60 backdrop-blur-md flex flex-col gap-2">
+      {/* AI Smart Replies Suggestions Pills */}
+      {suggestions && suggestions.length > 0 && (
+        <div className="flex items-center gap-2 pb-2 overflow-x-auto scrollbar-none animate-in slide-in-from-bottom-2 duration-300">
+          <span className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 dark:text-slate-500 mr-2 flex-shrink-0 select-none">
+            Suggested Replies:
+          </span>
+          {suggestions.map((reply, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onSelectSuggestion?.(reply)}
+              className="bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/20 hover:border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:text-white rounded-full px-3.5 py-1 text-xs font-bold transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+            >
+              {reply}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* File attachment preview card */}
       {selectedFile && (
         <div className="flex items-center justify-between p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl max-w-sm border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">

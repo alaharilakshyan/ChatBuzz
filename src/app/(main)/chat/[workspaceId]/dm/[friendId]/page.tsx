@@ -1,10 +1,11 @@
 import React from 'react'
 import { redirect } from 'next/navigation'
-import { Phone, Video, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/utils/supabase/server'
 import { ChatArea } from '@/components/chat/ChatArea'
 import { Message } from '@/components/chat/MessageBubble'
+import { DMHeaderControls } from '@/components/chat/DMHeaderControls'
 
 interface DMPageProps {
   params: Promise<{
@@ -117,11 +118,7 @@ export default async function DMPage({ params }: DMPageProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 text-slate-500">
-          <Phone className="w-5 h-5 cursor-pointer hover:text-emerald-500 transition-colors" />
-          <Video className="w-5 h-5 cursor-pointer hover:text-emerald-500 transition-colors" />
-          <Search className="w-5 h-5 cursor-pointer hover:text-emerald-500 transition-colors" />
-        </div>
+        <DMHeaderControls friendId={friendId} />
       </div>
 
       {/* Main chat stream area */}

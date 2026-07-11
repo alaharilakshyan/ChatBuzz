@@ -1,7 +1,7 @@
 import React from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
-import { ProfileForm } from '@/components/profile/ProfileForm'
+import { ProfileEditForm } from '@/components/profile/ProfileEditForm'
 
 export default async function ProfilePage() {
   const supabase = createClient()
@@ -26,8 +26,8 @@ export default async function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center p-6 transition-colors duration-300">
-      <ProfileForm initialProfile={profile} />
+    <div className="flex-1 h-full overflow-y-auto p-6 md:p-10 w-full flex justify-center bg-transparent">
+      <ProfileEditForm initialProfile={profile} />
     </div>
   )
 }

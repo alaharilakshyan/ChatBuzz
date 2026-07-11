@@ -1,5 +1,6 @@
 import React from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { RegisterForm } from '@/components/auth/RegisterForm'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Home } from 'lucide-react'
@@ -39,7 +40,14 @@ export default function RegisterPage() {
           </div>
           {/* Illustration Container */}
           <div className="w-full max-w-lg aspect-square flex items-center justify-center -mt-20">
-             <img src="/auth-doodle.png" alt="Working doodle" className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-screen dark:[filter:invert(70%)_sepia(100%)_saturate(400%)_hue-rotate(80deg)_brightness(120%)] dark:opacity-90" />
+             <Image 
+               src="https://ejgsaymsxqzvcrjpfego.supabase.co/storage/v1/object/public/branding/auth-doodle.png" 
+               alt="Working doodle" 
+               width={512} 
+               height={512} 
+               priority
+               className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-screen dark:[filter:invert(70%)_sepia(100%)_saturate(400%)_hue-rotate(80deg)_brightness(120%)] dark:opacity-90" 
+             />
           </div>
         </div>
       </div>

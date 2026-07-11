@@ -1,5 +1,6 @@
 import React from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Home } from 'lucide-react'
@@ -39,7 +40,14 @@ export default function LoginPage() {
           </div>
           {/* Illustration Container */}
           <div className="w-full max-w-lg aspect-square flex items-center justify-center -mt-20 overflow-hidden rounded-[2rem] shadow-2xl border border-slate-200/50 dark:border-slate-800/50">
-             <img src="/login-illustration.jpg" alt="ChatBuzz connect illustration" className="w-full h-full object-cover" />
+             <Image 
+               src="https://ejgsaymsxqzvcrjpfego.supabase.co/storage/v1/object/public/branding/login-illustration.jpg" 
+               alt="ChatBuzz connect illustration" 
+               width={512} 
+               height={512} 
+               priority
+               className="w-full h-full object-cover" 
+             />
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ export async function updateProfileAction(state: any, formData: FormData) {
   const username = formData.get('username') as string
   const bio = formData.get('bio') as string
   const avatarUrl = formData.get('avatar_url') as string
+  const bannerUrl = formData.get('banner_url') as string
 
   const supabase = createClient()
 
@@ -28,6 +29,10 @@ export async function updateProfileAction(state: any, formData: FormData) {
 
   if (avatarUrl !== undefined && avatarUrl !== '') {
     updatePayload.avatar_url = avatarUrl.trim()
+  }
+
+  if (bannerUrl !== undefined && bannerUrl !== '') {
+    updatePayload.banner_url = bannerUrl.trim()
   }
 
   const { error } = await supabase

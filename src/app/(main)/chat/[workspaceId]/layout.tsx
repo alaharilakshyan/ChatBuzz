@@ -1,8 +1,8 @@
 import React from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
-import { WorkspaceSidebar, Workspace } from '@/components/layout/WorkspaceSidebar'
 import { ChannelsSidebar, Channel, DMFriend } from '@/components/layout/ChannelsSidebar'
+import { Workspace } from '@/components/layout/WorkspaceSidebar'
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode
@@ -104,21 +104,16 @@ export default async function WorkspaceLayout({
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
-      <WorkspaceSidebar
-        workspaces={workspaces}
-        activeWorkspaceId={workspaceId}
-        user={profile}
-      />
+    <>
       <ChannelsSidebar
         workspaceName={workspaceName}
         channels={channels}
         friends={friendsList}
         isOwner={isOwner}
       />
-      <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-950">
+      <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-950/20">
         {children}
       </div>
-    </div>
+    </>
   )
 }

@@ -34,8 +34,14 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname
   
-  // Protect chats, profile, workspaces routes
-  const isProtectedPath = path.startsWith('/chat') || path.startsWith('/workspaces') || path.startsWith('/profile')
+  // Protect chats, profile, settings, friends, calls, workspaces routes
+  const isProtectedPath = 
+    path.startsWith('/chat') || 
+    path.startsWith('/workspaces') || 
+    path.startsWith('/profile') || 
+    path.startsWith('/settings') || 
+    path.startsWith('/friends') || 
+    path.startsWith('/calls')
   const isAuthPath = path === '/login' || path === '/register' || path === '/forgot-password'
 
   if (!user && isProtectedPath) {

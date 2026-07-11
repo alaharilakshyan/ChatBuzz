@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useActionState, useEffect } from 'react'
+import React, { useState, useActionState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { updateProfileAction } from '@/actions/profile'
@@ -36,6 +36,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialProfile }) => {
   const [avatarUrl, setAvatarUrl] = useState(initialProfile.avatar_url || '')
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [state, formAction, isSaving] = useActionState(updateProfileAction, null)
 
@@ -70,92 +71,109 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialProfile }) => {
     }
 
     setUploading(true)
-    setUploadProgress(10) // Start progress
+    setUploadProgress(20)
 
     try {
-      // 1. Generate unique collision-resistant path
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${initialProfile.id}/${crypto.randomUUID()}.${fileExt}`
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const img = new Image()
+        img.onload = () => {
+          // Compress user photo to a small max 150x150 canvas
+          const canvas = document.createElement('canvas')
+          const MAX_WIDTH = 150
+          const MAX_HEIGHT = 150
+          let width = img.width
+          let height = img.height
 
-      // 2. Direct upload to avatars bucket
-      setUploadProgress(30)
-      const { data, error } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: true,
-        })
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width
+              width = MAX_WIDTH
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height
+              height = MAX_HEIGHT
+            }
+          }
 
-      if (error) throw error
-
-      setUploadProgress(70)
-      
-      // 3. Resolve public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName)
-
-      setAvatarUrl(publicUrl)
-      setUploadProgress(100)
-
-      toast({
-        title: 'Upload Successful',
-        description: 'Avatar uploaded. Click "Save changes" to apply.',
-      })
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height)
+            // Output as compressed 70% quality JPEG Data URL
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7)
+            setAvatarUrl(compressedBase64)
+            setUploadProgress(100)
+            toast({
+              title: 'Image Optimized',
+              description: 'Profile photo processed. Click "Save changes" to apply.',
+            })
+            setUploading(false)
+            setUploadProgress(null)
+          }
+        }
+        img.src = event.target?.result as string
+      }
+      reader.readAsDataURL(file)
     } catch (err: any) {
+      console.error(err)
       toast({
-        title: 'Upload Failed',
-        description: err.message,
+        title: 'Failed to process image',
+        description: 'An error occurred during local image processing.',
         variant: 'destructive',
       })
-    } finally {
       setUploading(false)
       setUploadProgress(null)
     }
   }
 
   return (
-    <div className="w-full max-w-2xl">
-      <Link href="/chat/home">
-        <Button variant="ghost" className="mb-6 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800">
+    <div className="w-full max-w-2xl px-4 py-8">
+      <Link href="/chat">
+        <Button variant="ghost" className="mb-6 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors duration-200 text-slate-600 dark:text-slate-300">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Chat
         </Button>
       </Link>
 
-      <Card className="rounded-[28px] border-slate-200 dark:border-slate-800 shadow-xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
-        <CardHeader className="space-y-1 p-6">
-          <CardTitle className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
+      <Card className="rounded-[28px] border border-slate-200/50 dark:border-slate-800/50 shadow-2xl bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl transition-all duration-300">
+        <CardHeader className="space-y-1.5 p-8 border-b border-slate-100 dark:border-slate-800/40">
+          <CardTitle className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent">
             My Profile
           </CardTitle>
-          <CardDescription className="text-slate-500 dark:text-slate-400">
-            Manage your personal credentials and presence card details
+          <CardDescription className="text-slate-500 dark:text-slate-400 text-sm">
+            Configure your client identity details and profile presence
           </CardDescription>
         </CardHeader>
 
         <form action={formAction}>
           <input type="hidden" name="avatar_url" value={avatarUrl} />
 
-          <CardContent className="space-y-6 p-6">
+          <CardContent className="space-y-6 p-8">
             {/* Avatar section */}
-            <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-slate-100 dark:border-slate-800">
-              <div className="relative group">
-                <div className="absolute inset-0 bg-emerald-500 rounded-full blur-lg opacity-20 group-hover:opacity-30 transition-opacity" />
-                <Avatar className="h-24 w-24 border-2 border-emerald-500/10 shadow-lg relative z-10">
+            <div className="flex flex-col sm:flex-row items-center gap-8 pb-6 border-b border-slate-100 dark:border-slate-850/40">
+              <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                <div className="absolute -inset-1.5 bg-gradient-to-tr from-emerald-500 to-teal-500 rounded-full blur opacity-25 group-hover:opacity-40 transition-opacity duration-300" />
+                <Avatar className="h-28 w-28 border-2 border-emerald-500/20 shadow-xl relative z-10 hover:scale-[1.02] transition-transform duration-300">
                   <AvatarImage src={avatarUrl || undefined} className="object-cover" />
-                  <AvatarFallback className="text-2xl bg-emerald-500 text-white font-bold">
+                  <AvatarFallback className="text-3xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white font-black">
                     {username.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               </div>
 
-              <div className="flex flex-col items-center sm:items-start gap-2">
-                <h3 className="font-bold text-lg text-slate-800 dark:text-white">
+              <div className="flex flex-col items-center sm:items-start gap-3">
+                <h3 className="font-bold text-xl text-slate-800 dark:text-slate-100">
                   {username}
-                  <span className="text-sm font-normal text-slate-400 pl-1">#{initialProfile.user_tag}</span>
+                  <span className="text-xs font-semibold text-emerald-500/80 bg-emerald-500/10 px-2 py-0.5 rounded-full ml-2">
+                    #{initialProfile.user_tag}
+                  </span>
                 </h3>
                 
                 <input
+                  ref={fileInputRef}
                   id="avatar"
                   type="file"
                   accept="image/*"
@@ -163,29 +181,26 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialProfile }) => {
                   disabled={uploading || isSaving}
                   className="hidden"
                 />
-                <Label htmlFor="avatar">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={uploading || isSaving}
-                    asChild
-                    className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 hover:border-emerald-500"
-                  >
-                    <span className="cursor-pointer flex items-center justify-center">
-                      {uploading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Uploading {uploadProgress}%
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload Picture
-                        </>
-                      )}
-                    </span>
-                  </Button>
-                </Label>
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={uploading || isSaving}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-10 rounded-xl bg-slate-50/50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 font-semibold text-sm transition-all duration-200"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2 text-emerald-500" />
+                      Uploading {uploadProgress}%
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Picture
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
 
@@ -200,7 +215,7 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialProfile }) => {
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isSaving || uploading}
                 required
-                className="h-11 rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-sm focus-visible:ring-emerald-500 focus-visible:ring-1"
+                className="h-11 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 text-sm focus-visible:ring-emerald-500 focus-visible:ring-1"
               />
             </div>
 
@@ -214,16 +229,16 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialProfile }) => {
                 onChange={(e) => setBio(e.target.value)}
                 disabled={isSaving || uploading}
                 placeholder="Tell us about yourself..."
-                className="rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-sm focus-visible:ring-emerald-500 focus-visible:ring-2 min-h-[100px]"
+                className="rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 text-sm focus-visible:ring-emerald-500 focus-visible:ring-1 min-h-[120px] resize-none"
               />
             </div>
           </CardContent>
 
-          <CardFooter className="p-6 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+          <CardFooter className="p-8 border-t border-slate-100 dark:border-slate-850/40 flex justify-end gap-3">
             <Button
               type="submit"
               disabled={isSaving || uploading}
-              className="h-11 px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold text-sm shadow-md"
+              className="h-11 px-8 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold text-sm shadow-lg hover:shadow-emerald-500/10 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200"
             >
               {isSaving ? (
                 <>
@@ -240,4 +255,5 @@ export const ProfileForm: React.FC<ProfileFormProps> = ({ initialProfile }) => {
     </div>
   )
 }
+
 export default ProfileForm

@@ -46,7 +46,9 @@ self.addEventListener('fetch', (event) => {
     requestUrl.origin !== self.location.origin ||
     requestUrl.pathname.startsWith('/api') ||
     requestUrl.pathname.startsWith('/rest') ||
-    requestUrl.pathname.includes('/auth/')
+    requestUrl.pathname.includes('/auth/') ||
+    requestUrl.pathname.includes('supabase') ||
+    requestUrl.host.includes('supabase')
   ) {
     return;
   }

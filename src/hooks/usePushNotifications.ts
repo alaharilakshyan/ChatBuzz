@@ -6,7 +6,7 @@ import { saveSubscriptionAction } from '@/actions/push'
 // Helper function to decode public VAPID key base64 for PushManager
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
-  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/')
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
 
   const rawData = window.atob(base64)
   const outputArray = new Uint8Array(rawData.length)
@@ -57,7 +57,8 @@ export function usePushNotifications() {
       }
 
       // 3. Parse VAPID public key
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      const rawVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_KEY
+      const vapidPublicKey = rawVapidKey?.trim()
       if (!vapidPublicKey) {
         throw new Error('VAPID public key credentials missing.')
       }
@@ -93,7 +94,10 @@ export function usePushNotifications() {
       console.log('✅ Web Push subscription successfully saved.')
       return { success: true }
     } catch (err: any) {
-      console.error('❌ Failed to subscribe to web push:', err)
+      console.error("[Push Notification Subscription]", {
+        error: err.message || err,
+        timestamp: new Date().toISOString()
+      })
       return { error: err.message }
     }
   }

@@ -26,12 +26,20 @@ export function useWebRTC(currentUserId: string) {
 
   // Clean peer connection resources to prevent leaks
   const cleanPeerConnection = useCallback(() => {
-    // 1. Cancel animation/event listeners
+    // 1. Cancel animation/event listeners and stop tracks
     if (pcRef.current) {
+      pcRef.current.getReceivers().forEach((receiver) => {
+        if (receiver.track) receiver.track.stop()
+      })
+      pcRef.current.getSenders().forEach((sender) => {
+        if (sender.track) sender.track.stop()
+      })
+
       pcRef.current.onicecandidate = null
       pcRef.current.ontrack = null
       pcRef.current.onconnectionstatechange = null
       pcRef.current.oniceconnectionstatechange = null
+      pcRef.current.onnegotiationneeded = null
       
       // 2. Close peer connection
       pcRef.current.close()
@@ -120,8 +128,11 @@ export function useWebRTC(currentUserId: string) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidateInit))
           console.log('Queued ICE candidate applied successfully.')
-        } catch (err) {
-          console.error('Error applying queued ICE candidate:', err)
+        } catch (err: any) {
+          console.error("[WebRTC ICE Queue Failure]", {
+            error: err.message || err,
+            timestamp: new Date().toISOString()
+          })
         }
       }
     }
@@ -155,8 +166,11 @@ export function useWebRTC(currentUserId: string) {
               senderId: currentUserId,
             },
           })
-        } catch (err) {
-          console.error('Error handling remote offer:', err)
+        } catch (err: any) {
+          console.error("[WebRTC Handle Offer Failure]", {
+            error: err.message || err,
+            timestamp: new Date().toISOString()
+          })
         }
       })
       .on('broadcast', { event: 'webrtc_answer' }, async ({ payload }) => {
@@ -168,8 +182,11 @@ export function useWebRTC(currentUserId: string) {
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(payload.answer))
             await processQueuedCandidates(pc)
-          } catch (err) {
-            console.error('Error setting remote answer:', err)
+          } catch (err: any) {
+            console.error("[WebRTC Set Answer Failure]", {
+              error: err.message || err,
+              timestamp: new Date().toISOString()
+            })
           }
         }
       })
@@ -182,8 +199,11 @@ export function useWebRTC(currentUserId: string) {
           try {
             await pc.addIceCandidate(new RTCIceCandidate(payload.candidate))
             console.log('Direct ICE candidate applied successfully.')
-          } catch (err) {
-            console.error('Error adding remote ICE candidate:', err)
+          } catch (err: any) {
+            console.error("[WebRTC Apply Candidate Failure]", {
+              error: err.message || err,
+              timestamp: new Date().toISOString()
+            })
           }
         } else {
           console.log('Remote description not set yet. Queueing ICE candidate.')
@@ -222,8 +242,11 @@ export function useWebRTC(currentUserId: string) {
           senderId: currentUserId,
         },
       })
-    } catch (err) {
-      console.error('Error initiating WebRTC offer:', err)
+    } catch (err: any) {
+      console.error("[WebRTC Initiate Call Failure]", {
+        error: err.message || err,
+        timestamp: new Date().toISOString()
+      })
       endCall()
     }
   }, [setupSignaling, createPeerConnection, currentUserId, endCall])
@@ -256,8 +279,11 @@ export function useWebRTC(currentUserId: string) {
           senderId: currentUserId,
         },
       })
-    } catch (err) {
-      console.error('Error accepting WebRTC call:', err)
+    } catch (err: any) {
+      console.error("[WebRTC Accept Call Failure]", {
+        error: err.message || err,
+        timestamp: new Date().toISOString()
+      })
       endCall()
     }
   }, [setupSignaling, createPeerConnection, processQueuedCandidates, currentUserId, endCall])

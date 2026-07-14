@@ -135,8 +135,16 @@ export function useMediaDevices() {
     navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange)
     enumerateDevices()
 
+    const handleUnload = () => {
+      releaseStream()
+    }
+    window.addEventListener('beforeunload', handleUnload)
+    window.addEventListener('pagehide', handleUnload)
+
     return () => {
       navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange)
+      window.removeEventListener('beforeunload', handleUnload)
+      window.removeEventListener('pagehide', handleUnload)
       releaseStream()
     }
   }, [enumerateDevices, releaseStream])

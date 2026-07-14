@@ -171,7 +171,7 @@ export const DevicePrecheckModal: React.FC<DevicePrecheckModalProps> = ({
     stopAudioAnalyzer()
     
     // We create a copy of the stream tracks details, or send selection IDs so useWebRTC hook can build its connection
-    onConfirm(localStream, selectedAudioId, selectedVideoId)
+    onConfirm(null, selectedAudioId, selectedVideoId)
     onClose()
   }
 

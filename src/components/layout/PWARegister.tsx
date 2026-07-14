@@ -10,7 +10,7 @@ export const PWARegister = () => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       const handleRegister = async () => {
         try {
-          const registration = await navigator.serviceWorker.register('/sw.js')
+          const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
           console.log('PWA ServiceWorker registered with scope:', registration.scope)
 
           // Auto-prompt to subscribe if not yet configured, delaying slightly for page settle

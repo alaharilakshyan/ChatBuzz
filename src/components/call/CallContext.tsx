@@ -7,6 +7,7 @@ import { useMediaDevices } from '@/hooks/useMediaDevices'
 import { useWebRTC } from '@/hooks/useWebRTC'
 import { DevicePrecheckModal } from './DevicePrecheckModal'
 import { createCallLogAction } from '@/actions/calls'
+import { useToast } from '@/hooks/use-toast'
 
 export type CallState = 'idle' | 'ringing' | 'calling' | 'active' | 'ended'
 export type CallType = 'audio' | 'video'
@@ -38,6 +39,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
   currentUserAvatar,
 }) => {
   const supabase = createClient()
+  const { toast } = useToast()
 
   // Track call start time for duration logs
   const callStartTimeRef = useRef<number | null>(null)
@@ -179,12 +181,21 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
       .on('broadcast', { event: 'call_declined' }, ({ payload }) => {
         if (payload.callId !== callId) return
         console.log('Outgoing call declined by peer:', payload)
+        toast({
+          title: 'Call Declined',
+          description: `${callerName || 'Recipient'} declined your call.`,
+          variant: 'destructive',
+        })
         stopRingtone()
         resetCallState()
       })
       .on('broadcast', { event: 'call_ended' }, ({ payload }) => {
         if (payload.callId !== callId) return
         console.log('Active call ended by remote peer:', payload)
+        toast({
+          title: 'Call Ended',
+          description: 'The call was ended by the remote peer.',
+        })
         stopRingtone()
         resetCallState()
       })
@@ -199,6 +210,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
       stopRingtone()
     }
   }, [currentUserId, callState, callId, supabase])
+
+  // Watch connectionState changes to trigger toasts on failures/disconnects
+  useEffect(() => {
+    if (callState === 'active' && (connectionState === 'failed' || connectionState === 'disconnected')) {
+      toast({
+        title: 'Connection Lost',
+        description: 'The call session disconnected unexpectedly.',
+        variant: 'destructive',
+      })
+      resetCallState()
+    }
+  }, [connectionState, callState])
 
   const resetCallState = () => {
     // Only the caller writes the log to the database to prevent duplicate entries
@@ -294,8 +317,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
 
       // Set up the useWebRTC handlers for caller
       await startWebRTCNegotiation(newCallId, localMediaStream)
-    } catch (err) {
-      console.error('Failed to create call offer:', err)
+    } catch (err: any) {
+      console.error("[WebRTC Offer Creation Failure]", {
+        userId: currentUserId,
+        callId: newCallId,
+        error: err.message || err,
+        timestamp: new Date().toISOString()
+      })
+      toast({
+        title: 'Call Setup Failed',
+        description: err.message || 'Could not access your microphone or camera.',
+        variant: 'destructive',
+      })
       resetCallState()
     }
   }
@@ -311,24 +344,39 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
   const handleCalleeConfirm = async (stream: MediaStream | null, audioId: string, videoId: string) => {
     if (!callId || !incomingOffer) return
 
-    // Acquire callee stream with selected hardware devices
-    const localMediaStream = stream || await acquireStream(videoId, audioId)
+    try {
+      // Acquire callee stream with selected hardware devices
+      const localMediaStream = stream || await acquireStream(videoId, audioId)
 
-    setCallState('active')
-    callStartTimeRef.current = Date.now()
+      setCallState('active')
+      callStartTimeRef.current = Date.now()
 
-    // Broadcast call accept to notify caller
-    globalCallChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'call_accepted',
-      payload: {
+      // Broadcast call accept to notify caller
+      globalCallChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'call_accepted',
+        payload: {
+          callId,
+          calleeId: currentUserId,
+        },
+      })
+
+      // Setup useWebRTC negotiation for callee
+      await acceptWebRTCNegotiation(callId, localMediaStream, incomingOffer)
+    } catch (err: any) {
+      console.error("[WebRTC Callee Acceptance Failure]", {
+        userId: currentUserId,
         callId,
-        calleeId: currentUserId,
-      },
-    })
-
-    // Setup useWebRTC negotiation for callee
-    await acceptWebRTCNegotiation(callId, localMediaStream, incomingOffer)
+        error: err.message || err,
+        timestamp: new Date().toISOString()
+      })
+      toast({
+        title: 'Failed to Accept Call',
+        description: err.message || 'Could not access your camera or microphone.',
+        variant: 'destructive',
+      })
+      declineIncomingCall()
+    }
   }
 
   // D. Decline Call Actions

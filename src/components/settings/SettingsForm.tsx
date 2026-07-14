@@ -18,6 +18,7 @@ import {
   deleteAccountAction,
   UserSettingsPayload
 } from '@/actions/settings'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 import {
   User,
   Shield,
@@ -84,6 +85,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
   const router = useRouter()
   const { toast } = useToast()
   const { theme: activeTheme, setTheme } = useTheme()
+  const { subscribeToPush } = usePushNotifications()
 
   const [activeTab, setActiveTab] = useState<TabType>('account')
   
@@ -115,7 +117,13 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
         .upload(filePath, file, { cacheControl: '3600', upsert: true })
 
       if (uploadErr) {
-        console.error("❌ Full Storage Upload Error Context:", uploadErr)
+        console.error("[Storage Upload Failure]", {
+          bucketName: 'backgrounds',
+          userId: user.id,
+          fileName,
+          error: uploadErr.message || uploadErr,
+          timestamp: new Date().toISOString()
+        })
         throw uploadErr
       }
 
@@ -192,8 +200,23 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
     // 1. Save original value for rollback
     const originalValue = settings[key]
 
+    // Special Case: message_notifications_enabled toggle to true triggers push subscription
+    if (key === 'message_notifications_enabled' && newValue === true) {
+      const pushRes = await subscribeToPush()
+      if (pushRes?.error) {
+        toast({
+          title: 'Push Registration Failed',
+          description: pushRes.error,
+          variant: 'destructive',
+        })
+        // Rollback switch and exit
+        setSettings((prev) => ({ ...prev, [key]: originalValue } as UserSettings))
+        return
+      }
+    }
+
     // 2. Optimistic Update (Immediate Local Update)
-    setSettings((prev) => ({ ...prev, [key]: newValue }))
+    setSettings((prev) => ({ ...prev, [key]: newValue } as UserSettings))
 
     // 3. Special Case: Theme toggle
     if (key === 'theme') {
@@ -207,7 +230,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
 
       if (res?.error) {
         // Rollback on error
-        setSettings((prev) => ({ ...prev, [key]: originalValue }))
+        setSettings((prev) => ({ ...prev, [key]: originalValue } as UserSettings))
         if (key === 'theme') {
           setTheme(originalValue as string)
         }

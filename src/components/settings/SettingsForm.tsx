@@ -121,9 +121,10 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
           bucketName: 'backgrounds',
           userId: user.id,
           fileName,
-          error: uploadErr.message || uploadErr,
+          errorMsg: uploadErr.message || String(uploadErr),
           timestamp: new Date().toISOString()
         })
+        console.error("[Storage Upload Failure] Raw Error Object:", uploadErr)
         throw uploadErr
       }
 

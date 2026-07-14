@@ -48,13 +48,37 @@ export async function updateSession(request: NextRequest) {
   if (!user && isProtectedPath) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    return NextResponse.redirect(url)
+    const redirectResponse = NextResponse.redirect(url)
+    // Copy cookies from supabaseResponse to ensure session state changes are preserved
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value, {
+        path: cookie.path,
+        domain: cookie.domain,
+        maxAge: cookie.maxAge,
+        secure: cookie.secure,
+        sameSite: cookie.sameSite,
+        httpOnly: cookie.httpOnly,
+      })
+    })
+    return redirectResponse
   }
 
   if (user && isAuthPath) {
     const url = request.nextUrl.clone()
     url.pathname = '/chat'
-    return NextResponse.redirect(url)
+    const redirectResponse = NextResponse.redirect(url)
+    // Copy cookies from supabaseResponse to ensure session state changes are preserved
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value, {
+        path: cookie.path,
+        domain: cookie.domain,
+        maxAge: cookie.maxAge,
+        secure: cookie.secure,
+        sameSite: cookie.sameSite,
+        httpOnly: cookie.httpOnly,
+      })
+    })
+    return redirectResponse
   }
 
   return supabaseResponse

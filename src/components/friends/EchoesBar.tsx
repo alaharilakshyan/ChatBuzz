@@ -7,19 +7,21 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useToast } from '@/hooks/use-toast'
 import { createClient } from '@/utils/supabase/client'
-import { createEchoAction } from '@/actions/echoes'
+import { createStoryAction } from '@/actions/echoes'
 import { useRouter } from 'next/navigation'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 
-export interface Echo {
+export interface Story {
   id: string
   user_id: string
   media_url: string
   caption: string | null
   created_at: string
   expires_at: string
+  media_type: 'image' | 'video'
+  media_extension: 'jpg' | 'jpeg' | 'png' | 'gif' | 'webp' | 'mp4' | 'webm' | 'mov'
   profiles: {
     username: string
     avatar_url: string | null
@@ -27,7 +29,7 @@ export interface Echo {
 }
 
 interface EchoesBarProps {
-  activeEchoes: Echo[]
+  activeEchoes: Story[]
   currentUser: {
     id: string
     username: string
@@ -56,29 +58,29 @@ export const EchoesBar: React.FC<EchoesBarProps> = ({ activeEchoes, currentUser 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [isVideoLoading, setIsVideoLoading] = useState(false)
 
-  // 1. Group active echoes by user
-  const groupedEchoes: Record<string, Echo[]> = {}
+  // 1. Group active stories by user
+  const groupedStories: Record<string, Story[]> = {}
   
-  // Always group current user's echoes first if they exist
-  activeEchoes.forEach((echo) => {
-    if (!groupedEchoes[echo.user_id]) {
-      groupedEchoes[echo.user_id] = []
+  // Always group current user's stories first if they exist
+  activeEchoes.forEach((story) => {
+    if (!groupedStories[story.user_id]) {
+      groupedStories[story.user_id] = []
     }
-    groupedEchoes[echo.user_id].push(echo)
+    groupedStories[story.user_id].push(story)
   })
 
-  // Sort echoes chronologically inside each user stack
-  Object.keys(groupedEchoes).forEach((userId) => {
-    groupedEchoes[userId].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  // Sort stories chronologically inside each user stack
+  Object.keys(groupedStories).forEach((userId) => {
+    groupedStories[userId].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   })
 
-  const storyUsers = Object.keys(groupedEchoes).map((userId) => {
-    const userEchoes = groupedEchoes[userId]
+  const storyUsers = Object.keys(groupedStories).map((userId) => {
+    const userStories = groupedStories[userId]
     return {
       userId,
-      username: userEchoes[0].profiles.username,
-      avatarUrl: userEchoes[0].profiles.avatar_url,
-      echoes: userEchoes,
+      username: userStories[0].profiles.username,
+      avatarUrl: userStories[0].profiles.avatar_url,
+      echoes: userStories,
     }
   })
 
@@ -89,7 +91,7 @@ export const EchoesBar: React.FC<EchoesBarProps> = ({ activeEchoes, currentUser 
     storyUsers.unshift(userStory)
   }
 
-  const hasSelfStories = groupedEchoes[currentUser.id]?.length > 0
+  const hasSelfStories = groupedStories[currentUser.id]?.length > 0
 
   // 2. Playback Slides progress timer handler
   useEffect(() => {
@@ -102,7 +104,7 @@ export const EchoesBar: React.FC<EchoesBarProps> = ({ activeEchoes, currentUser 
     const currentStory = currentStories[activeSlideIndex]
     if (!currentStory) return
 
-    const isVideo = currentStory.media_url.match(/\.(mp4|webm|mov|quicktime)/i) || currentStory.media_url.includes('video')
+    const isVideo = currentStory.media_type === 'video'
 
     if (isVideo) {
       // For videos, progress is driven by timeUpdate event in video tag, not standard intervals
@@ -186,13 +188,19 @@ export const EchoesBar: React.FC<EchoesBarProps> = ({ activeEchoes, currentUser 
 
     setIsUploading(true)
     try {
-      const fileExt = uploadFile.name.split('.').pop()
+      const fileExt = uploadFile.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm', 'mov']
+      const mediaExtension = validExtensions.includes(fileExt) ? fileExt : 'jpg'
+      
+      const isVideo = uploadFile.type.startsWith('video')
+      const mediaType = isVideo ? 'video' : 'image'
+
       // Character sanitization and flat filename checks
       const cleanBase = uploadFile.name.replace(/[^a-zA-Z0-9]/g, '_')
       const fileName = `${currentUser.id}-${Date.now()}-${cleanBase}.${fileExt}`
 
       const { data, error: uploadErr } = await supabase.storage
-        .from('echoes')
+        .from('stories_media')
         .upload(fileName, uploadFile, {
           cacheControl: '3600',
           upsert: true,
@@ -201,10 +209,15 @@ export const EchoesBar: React.FC<EchoesBarProps> = ({ activeEchoes, currentUser 
       if (uploadErr) throw uploadErr
 
       const { data: { publicUrl } } = supabase.storage
-        .from('echoes')
+        .from('stories_media')
         .getPublicUrl(fileName)
 
-      const actionRes = await createEchoAction(publicUrl, uploadCaption || undefined)
+      const actionRes = await createStoryAction(
+        publicUrl,
+        mediaType as any,
+        mediaExtension as any,
+        uploadCaption || undefined
+      )
       if (actionRes?.error) throw new Error(actionRes.error)
 
       toast({
@@ -333,8 +346,8 @@ export const EchoesBar: React.FC<EchoesBarProps> = ({ activeEchoes, currentUser 
               {/* Media element: Renders Image or Video dynamically */}
               <div className="flex-1 w-full h-full flex items-center justify-center relative bg-slate-950">
                 {storyUsers[selectedUserIndex]?.echoes[activeSlideIndex] && (() => {
-                  const media = storyUsers[selectedUserIndex].echoes[activeSlideIndex].media_url
-                  const isVideo = media.match(/\.(mp4|webm|mov|quicktime)/i) || media.includes('video')
+                  const story = storyUsers[selectedUserIndex].echoes[activeSlideIndex]
+                  const isVideo = story.media_type === 'video'
 
                   if (isVideo) {
                     return (
@@ -346,7 +359,7 @@ export const EchoesBar: React.FC<EchoesBarProps> = ({ activeEchoes, currentUser 
                             el.onwaiting = () => setIsVideoLoading(true)
                           }
                         }}
-                        src={media}
+                        src={story.media_url}
                         autoPlay
                         playsInline
                         muted
@@ -364,7 +377,7 @@ export const EchoesBar: React.FC<EchoesBarProps> = ({ activeEchoes, currentUser 
 
                   return (
                     <img
-                      src={media}
+                      src={story.media_url}
                       alt="Story content"
                       className="w-full h-full object-contain"
                       onLoad={() => setSlideProgress(0)}

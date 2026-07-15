@@ -16,7 +16,7 @@ import {
   blockUserAction
 } from '@/actions/friends'
 import { Label } from '@/components/ui/label'
-import { Echo, EchoesBar } from './EchoesBar'
+import { Story, EchoesBar } from './EchoesBar'
 import {
   Users,
   UserPlus,
@@ -55,7 +55,7 @@ interface FriendsDashboardProps {
   initialPending: PendingRequest[]
   initialBlocked: FriendProfile[]
   userId: string
-  activeEchoes: Echo[]
+  activeEchoes: Story[]
   currentUser: {
     id: string
     username: string

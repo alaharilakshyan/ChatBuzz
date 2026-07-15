@@ -94,11 +94,11 @@ export function usePushNotifications() {
       console.log('✅ Web Push subscription successfully saved.')
       return { success: true }
     } catch (err: any) {
-      console.error("[Push Notification Subscription]", {
+      console.warn("[Push Notification Subscription] degraded gracefully:", {
         error: err.message || err,
         timestamp: new Date().toISOString()
       })
-      return { error: err.message }
+      return { success: false, error: err.message || 'Push registration failed.' }
     }
   }
 

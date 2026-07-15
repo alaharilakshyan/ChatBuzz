@@ -98,23 +98,25 @@ export default async function FriendsPage() {
     avatar_url: null,
   }
 
-  // 6. Fetch active (unexpired) echoes
-  const { data: echoes } = await supabase
-    .from('echoes')
-    .select('id, user_id, media_url, caption, created_at, expires_at, profiles(username, avatar_url)')
+  // 6. Fetch active (unexpired) stories
+  const { data: stories } = await supabase
+    .from('stories')
+    .select('id, user_id, media_url, caption, created_at, expires_at, media_type, media_extension, profiles(username, avatar_url)')
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: true })
 
-  const formattedEchoes = (echoes || []).map((echo: any) => ({
-    id: echo.id,
-    user_id: echo.user_id,
-    media_url: echo.media_url,
-    caption: echo.caption,
-    created_at: echo.created_at,
-    expires_at: echo.expires_at,
+  const formattedEchoes = (stories || []).map((story: any) => ({
+    id: story.id,
+    user_id: story.user_id,
+    media_url: story.media_url,
+    caption: story.caption,
+    created_at: story.created_at,
+    expires_at: story.expires_at,
+    media_type: story.media_type,
+    media_extension: story.media_extension,
     profiles: {
-      username: echo.profiles?.username || 'Unknown User',
-      avatar_url: echo.profiles?.avatar_url || null,
+      username: story.profiles?.username || 'Unknown User',
+      avatar_url: story.profiles?.avatar_url || null,
     }
   }))
 

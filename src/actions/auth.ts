@@ -10,14 +10,19 @@ export async function loginAction(state: any, formData: FormData) {
     return { error: 'Email and password are required' }
   }
 
-  const supabase = createClient()
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  try {
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
 
-  if (error) {
-    return { error: error.message }
+    if (error) {
+      return { error: error.message }
+    }
+
+    return { success: true }
+  } catch (err: any) {
+    console.error('Login connection failure:', err)
+    return { success: false, error: "Network connection failed. Please ensure you are online and try again." }
   }
-
-  return { success: true }
 }
 
 export async function signupAction(state: any, formData: FormData) {

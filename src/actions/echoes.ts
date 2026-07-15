@@ -3,7 +3,12 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function createEchoAction(mediaUrl: string, caption?: string) {
+export async function createStoryAction(
+  mediaUrl: string,
+  mediaType: 'image' | 'video',
+  mediaExtension: 'jpg' | 'jpeg' | 'png' | 'gif' | 'webp' | 'mp4' | 'webm' | 'mov',
+  caption?: string
+) {
   if (!mediaUrl) {
     return { error: 'Media URL is required' }
   }
@@ -15,12 +20,14 @@ export async function createEchoAction(mediaUrl: string, caption?: string) {
   }
 
   const { data, error } = await supabase
-    .from('echoes')
+    .from('stories')
     .insert({
       user_id: user.id,
       media_url: mediaUrl,
       caption: caption || null,
-      created_by: user.id
+      created_by: user.id,
+      media_type: mediaType,
+      media_extension: mediaExtension
     })
     .select()
     .single()
@@ -30,5 +37,5 @@ export async function createEchoAction(mediaUrl: string, caption?: string) {
   }
 
   revalidatePath('/friends')
-  return { success: true, echo: data }
+  return { success: true, story: data }
 }

@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -1230,6 +1230,71 @@ export type Database = {
           srtext?: string | null
         }
         Relationships: []
+      }
+      stories: {
+        Row: {
+          caption: string | null
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          media_extension: Database["public"]["Enums"]["media_extension"]
+          media_type: Database["public"]["Enums"]["media_type"]
+          media_url: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          media_extension: Database["public"]["Enums"]["media_extension"]
+          media_type: Database["public"]["Enums"]["media_type"]
+          media_url: string
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          media_extension?: Database["public"]["Enums"]["media_extension"]
+          media_type?: Database["public"]["Enums"]["media_type"]
+          media_url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      story_views: {
+        Row: {
+          created_at: string
+          id: string
+          story_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          story_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          story_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "story_views_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "stories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_devices: {
         Row: {
@@ -2511,6 +2576,16 @@ export type Database = {
     }
     Enums: {
       friend_request_status: "pending" | "accepted" | "rejected"
+      media_extension:
+        | "jpg"
+        | "jpeg"
+        | "png"
+        | "gif"
+        | "webp"
+        | "mp4"
+        | "webm"
+        | "mov"
+      media_type: "image" | "video"
       presence_status: "online" | "offline" | "away" | "dnd"
     }
     CompositeTypes: {
@@ -2648,6 +2723,17 @@ export const Constants = {
   public: {
     Enums: {
       friend_request_status: ["pending", "accepted", "rejected"],
+      media_extension: [
+        "jpg",
+        "jpeg",
+        "png",
+        "gif",
+        "webp",
+        "mp4",
+        "webm",
+        "mov",
+      ],
+      media_type: ["image", "video"],
       presence_status: ["online", "offline", "away", "dnd"],
     },
   },

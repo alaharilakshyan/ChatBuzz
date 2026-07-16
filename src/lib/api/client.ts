@@ -49,7 +49,13 @@ export async function fetchExpress(path: string, options: RequestInit = {}): Pro
         ...options,
         headers
       });
-      const retryData = await retryResponse.json();
+      let retryData: any = {};
+      const retryText = await retryResponse.text();
+      try {
+        retryData = retryText ? JSON.parse(retryText) : {};
+      } catch {
+        retryData = { error: retryText || 'An unexpected non-JSON response was returned from the server.' };
+      }
       if (!retryResponse.ok) {
         throw new Error(retryData.error || 'Retry request failed.');
       }
@@ -63,7 +69,14 @@ export async function fetchExpress(path: string, options: RequestInit = {}): Pro
     }
   }
 
-  const data = await response.json();
+  let data: any = {};
+  const text = await response.text();
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (jsonErr) {
+    data = { error: text || 'An unexpected non-JSON response was returned from the server.' };
+  }
+
   if (!response.ok) {
     throw new Error(data.error || 'Request to Express server failed.');
   }

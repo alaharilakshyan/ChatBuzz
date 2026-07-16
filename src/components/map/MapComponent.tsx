@@ -161,50 +161,72 @@ export const MapComponent: React.FC<MapComponentProps> = ({ initialFriends, curr
   }
 
   const defaultCenter: [number, number] = [37.7749, -122.4194] // Default SF center
-  const mapCenter = userLocation || defaultCenter
+  const [activeCenter, setActiveCenter] = useState<[number, number]>(defaultCenter)
+
+  useEffect(() => {
+    if (userLocation) {
+      setActiveCenter(userLocation)
+    }
+  }, [userLocation])
+
+  const [panelOpen, setPanelOpen] = useState(true)
+
+  const handleLocateUser = (lat: number, lng: number) => {
+    setActiveCenter([lat, lng])
+    setRecenterTrigger((prev) => prev + 1)
+  }
 
   return (
-    <div className="flex-1 w-full h-full relative overflow-hidden bg-slate-100 dark:bg-slate-950 flex flex-col">
-      {/* Top Banner Status Bar */}
-      <div className="absolute top-4 left-4 right-4 z-40 flex justify-between items-center bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200/50 dark:border-slate-800/50 rounded-2xl p-4 shadow-lg select-none pointer-events-auto">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-xl ${ghostMode ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
-            {ghostMode ? <EyeOff className="w-5 h-5" /> : <Navigation className="w-5 h-5 animate-pulse" />}
+    <div className="flex-1 w-full h-full relative overflow-hidden bg-slate-950 flex">
+      
+      {/* Full-Screen Leaflet Map Area */}
+      <div className="flex-grow h-full z-10 relative">
+        
+        {/* Top Banner Status Bar (HUD Style) */}
+        <div className="absolute top-4 left-4 right-4 z-45 flex justify-between items-center bg-slate-950/80 backdrop-blur-xl border border-slate-900 rounded-2xl p-4 shadow-2xl select-none">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-xl ${ghostMode ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-400'}`}>
+              {ghostMode ? <EyeOff className="w-4 h-4" /> : <Navigation className="w-4 h-4 animate-pulse" />}
+            </div>
+            <div>
+              <h2 className="font-bold text-sm text-white">
+                {ghostMode ? 'Ghost Mode Active' : 'Location Syncing'}
+              </h2>
+              <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                {ghostMode ? 'Your position is hidden from friends' : 'Friends see your position in real-time'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-bold text-sm text-slate-800 dark:text-slate-100">
-              {ghostMode ? 'Ghost Mode Active' : 'Location Syncing'}
-            </h2>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
-              {ghostMode ? 'Your position is hidden from friends' : 'Friends see your position in real-time'}
-            </p>
-          </div>
-        </div>
 
-        <div className="flex gap-2">
-          {userLocation && (
+          <div className="flex gap-2">
+            {userLocation && (
+              <Button
+                onClick={() => handleLocateUser(userLocation[0], userLocation[1])}
+                variant="outline"
+                size="sm"
+                className="rounded-xl text-xs font-bold gap-1.5 h-9 bg-slate-900 border-slate-800 text-white hover:bg-slate-800"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                Recenter
+              </Button>
+            )}
             <Button
-              onClick={() => {
-                setRecenterTrigger((prev) => prev + 1) // Trigger recenter trigger counter
-              }}
+              onClick={() => setPanelOpen(!panelOpen)}
               variant="outline"
               size="sm"
-              className="rounded-xl text-xs font-bold gap-1.5 h-9"
+              className="rounded-xl text-xs font-bold gap-1.5 h-9 bg-slate-900 border-slate-800 text-white hover:bg-slate-800 lg:hidden"
             >
-              <MapPin className="w-3.5 h-3.5" />
-              Recenter
+              Coordinates
             </Button>
-          )}
+          </div>
         </div>
-      </div>
 
-      {/* Full-Screen Leaflet Map Area */}
-      <div className="flex-1 w-full h-full z-10">
+        {/* Map Container */}
         <MapContainer
-          center={mapCenter}
+          center={activeCenter}
           zoom={13}
           scrollWheelZoom={true}
-          style={{ width: '100%', height: '100%', background: 'transparent' }}
+          style={{ width: '100%', height: '100%', background: '#09100c' }}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -216,10 +238,10 @@ export const MapComponent: React.FC<MapComponentProps> = ({ initialFriends, curr
           {userLocation && !ghostMode && (
             <Marker position={userLocation} icon={getSelfMarkerIcon()}>
               <Popup>
-                <div className="text-center p-1">
-                  <p className="font-bold text-xs text-indigo-500">You (Current Location)</p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-                    Lat: {userLocation[0].toFixed(5)}, Lng: {userLocation[1].toFixed(5)}
+                <div className="text-center p-1 bg-slate-950 text-white rounded-lg">
+                  <p className="font-bold text-xs text-indigo-400">You (Current Location)</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                    {userLocation[0].toFixed(5)}° N, {userLocation[1].toFixed(5)}° W
                   </p>
                 </div>
               </Popup>
@@ -234,22 +256,22 @@ export const MapComponent: React.FC<MapComponentProps> = ({ initialFriends, curr
               icon={getAvatarMarkerIcon(marker.avatar_url, marker.username, marker.isOnline)}
             >
               <Popup>
-                <div className="flex items-center gap-2.5 min-w-[150px] p-1">
-                  <Avatar className="h-9 w-9 border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2.5 min-w-[150px] p-1 bg-slate-950 text-white rounded-lg">
+                  <Avatar className="h-9 w-9 border border-slate-800">
                     <AvatarImage src={marker.avatar_url || undefined} className="object-cover" />
-                    <AvatarFallback className="bg-emerald-500 text-white font-bold">
+                    <AvatarFallback className="bg-emerald-500 text-slate-950 font-bold">
                       {marker.username.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="text-left">
-                    <p className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                    <p className="font-bold text-xs text-white">
                       {marker.username}
                     </p>
-                    <p className="text-[9px] text-slate-400 dark:text-slate-500 font-semibold uppercase mt-0.5">
+                    <p className="text-[9px] text-slate-500 font-semibold uppercase mt-0.5">
                       {marker.isOnline ? 'Online now' : 'Last seen position'}
                     </p>
                     {marker.last_update && (
-                      <p className="text-[8px] text-slate-400 mt-0.5">
+                      <p className="text-[8px] text-slate-500 mt-0.5 font-mono">
                         {new Date(marker.last_update).toLocaleTimeString()}
                       </p>
                     )}
@@ -260,9 +282,67 @@ export const MapComponent: React.FC<MapComponentProps> = ({ initialFriends, curr
           ))}
 
           {/* Auto center map trigger helper */}
-          {userLocation && <RecenterMap center={userLocation} trigger={recenterTrigger} />}
+          <RecenterMap center={activeCenter} trigger={recenterTrigger} />
         </MapContainer>
       </div>
+
+      {/* Slide-out Coordinates Sidebar Panel */}
+      {panelOpen && (
+        <aside className="w-80 border-l border-slate-900 bg-slate-950/80 backdrop-blur-xl h-full flex flex-col z-35 relative p-5 select-none shrink-0 overflow-y-auto">
+          <div className="pt-20 pb-4 border-b border-slate-900">
+            <h3 className="text-sm font-extrabold text-white tracking-tight uppercase">
+              BuzzMap Coordinates
+            </h3>
+            <p className="text-[10px] text-slate-500 font-semibold mt-1">
+              Select a friend to locate them on the map
+            </p>
+          </div>
+
+          <div className="flex-grow overflow-y-auto py-4 space-y-3">
+            {markers.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 text-xs font-semibold">
+                NO LOCATIONS SHARED YET
+              </div>
+            ) : (
+              markers.map((marker) => (
+                <div
+                  key={marker.id}
+                  onClick={() => handleLocateUser(marker.lat, marker.lng)}
+                  className="p-3.5 bg-slate-900/40 border border-slate-900 hover:border-emerald-500/10 rounded-2xl flex items-center justify-between cursor-pointer group transition-all duration-300 hover:-translate-y-0.5"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative">
+                      <Avatar className="h-9 w-9 border border-slate-900">
+                        <AvatarImage src={marker.avatar_url || undefined} className="object-cover" />
+                        <AvatarFallback className="bg-emerald-500 text-slate-950 font-bold">
+                          {marker.username.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-slate-900 ${marker.isOnline ? 'bg-emerald-500' : 'bg-slate-700'}`} />
+                    </div>
+                    <div className="text-left min-w-0">
+                      <p className="font-bold text-xs text-white group-hover:text-emerald-400 transition-colors truncate">
+                        {marker.username}
+                      </p>
+                      <p className="text-[9px] text-slate-500 font-mono mt-0.5 truncate">
+                        {marker.lat.toFixed(4)}° N, {marker.lng.toFixed(4)}° W
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-7 w-7 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-400 text-slate-500"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </aside>
+      )}
+
     </div>
   )
 }

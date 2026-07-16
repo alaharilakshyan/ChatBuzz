@@ -36,17 +36,20 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch Event (Network-First fallback to Cache)
+// Fetch Event (Cache static assets only, bypass document pages like /login)
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
 
-  // Avoid caching non-GET requests, API queries, and auth callbacks
+  const isStaticAsset =
+    requestUrl.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff2|woff|ttf|json|ico)$/) ||
+    requestUrl.pathname.startsWith('/_next/static') ||
+    requestUrl.pathname.startsWith('/uploads/');
+
+  // Bypass the service worker completely for pages and non-static resources
   if (
     event.request.method !== 'GET' ||
     requestUrl.origin !== self.location.origin ||
-    requestUrl.pathname.startsWith('/api') ||
-    requestUrl.pathname.startsWith('/rest') ||
-    requestUrl.pathname.includes('/auth/')
+    !isStaticAsset
   ) {
     return;
   }

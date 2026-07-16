@@ -239,25 +239,77 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
   ]
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-50/10 dark:bg-slate-900/10 p-6 md:p-10 select-none">
-      <div className="w-full max-w-4xl mx-auto space-y-6 flex-1 flex flex-col">
+    <div className="flex-grow flex flex-col h-full bg-slate-950/20 p-6 md:p-8 select-none overflow-y-auto">
+      <div className="w-full max-w-5xl mx-auto space-y-8 flex-1 flex flex-col">
         
         {/* Echoes Bar (Stories) */}
         <EchoesBar activeEchoes={activeEchoes} currentUser={currentUser} />
         
+        {/* Active Now Section (Horizontal Scrollable) */}
+        {activeTab === 'online' && onlineFriends.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-sm text-white">Active Now</h2>
+              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full font-bold">
+                {onlineFriends.length} LIVE
+              </span>
+            </div>
+            <div className="flex overflow-x-auto no-scrollbar gap-4 pb-2">
+              {onlineFriends.slice(0, 4).map((f, idx) => {
+                const activities = [
+                  { label: "listening to ", app: "Spotify", color: "text-[#1DB954]", icon: "music" },
+                  { label: "playing ", app: "Valorant (Lobby)", color: "text-emerald-400", icon: "gamepad" },
+                  { label: "coding in ", app: "VS Code", color: "text-blue-400", icon: "terminal" },
+                  { label: "away ", app: "Exploring the nebula...", color: "text-slate-400", icon: "compass" },
+                ]
+                const act = activities[idx % activities.length]
+                return (
+                  <div key={f.id} className="flex-shrink-0 w-64 bg-slate-900/40 backdrop-blur-md border border-slate-800/60 p-4 rounded-xl flex gap-3 items-center">
+                    <div className="relative">
+                      <Avatar className="h-11 w-11 rounded-lg border border-white/5">
+                        <AvatarImage src={f.avatar_url || undefined} className="object-cover rounded-lg" />
+                        <AvatarFallback className="bg-emerald-500 text-slate-950 font-bold rounded-lg flex items-center justify-center">
+                          {f.username.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-slate-950 rounded-full flex items-center justify-center border border-white/10">
+                        {act.icon === "music" ? (
+                          <span className="text-[10px] text-[#1DB954]">♫</span>
+                        ) : act.icon === "gamepad" ? (
+                          <span className="text-[10px] text-emerald-400">🎮</span>
+                        ) : act.icon === "terminal" ? (
+                          <span className="text-[10px] text-blue-400">⌨</span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">☄</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-left min-w-0">
+                      <p className="font-bold text-xs text-white truncate">{f.username}</p>
+                      <p className="text-[10px] text-slate-400 truncate">
+                        {act.label} <span className={act.color}>{act.app}</span>
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Header / Tabs bar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 dark:border-slate-800/40 pb-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-900 pb-5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-500">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400">
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-extrabold text-xl text-slate-800 dark:text-slate-100">Friends</h1>
-              <p className="text-xs text-slate-400 dark:text-slate-500">Add friends and manage active chats</p>
+              <h1 className="font-extrabold text-xl text-white">Friends</h1>
+              <p className="text-xs text-slate-500">Manage connections and view active highlights</p>
             </div>
           </div>
 
-          <div className="flex items-center flex-wrap gap-1 bg-slate-100/60 dark:bg-slate-950/40 p-1 rounded-xl border border-slate-200/40 dark:border-slate-850/40">
+          <div className="flex items-center flex-wrap gap-1 bg-slate-950/40 p-1 rounded-xl border border-slate-900">
             {tabs.map((tab) => {
               const Icon = tab.icon
               const isActive = activeTab === tab.id
@@ -265,10 +317,10 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as TabType)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
                     isActive
-                      ? 'bg-white dark:bg-slate-900 shadow-md text-emerald-500 dark:text-emerald-400'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      ? 'bg-slate-900 shadow-md text-emerald-400'
+                      : 'text-slate-500 hover:text-slate-200'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -282,18 +334,18 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
         {/* Dynamic Search Filter (for non-Add tab) */}
         {activeTab !== 'add' && (
           <div className="relative w-full">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <Input
-              placeholder="Search users..."
+              placeholder="Search users by name or tag..."
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
-              className="h-10 pl-10 pr-4 rounded-xl bg-white/60 dark:bg-slate-950/20 border border-slate-200 dark:border-slate-800 text-xs focus-visible:ring-emerald-500 focus-visible:ring-1"
+              className="h-10 pl-10 pr-4 rounded-xl bg-slate-950/40 border border-slate-900 text-xs focus-visible:ring-emerald-500 focus-visible:ring-1"
             />
           </div>
         )}
 
         {/* Tab View Frames */}
-        <div className="flex-1 overflow-y-auto min-h-[350px]">
+        <div className="flex-grow overflow-y-auto min-h-[350px]">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -301,17 +353,17 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.15 }}
-              className="space-y-3"
+              className={activeTab === 'add' ? 'space-y-4' : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4'}
             >
               {/* ADD FRIEND TAB */}
               {activeTab === 'add' && (
-                <Card className="rounded-[24px] border border-slate-200/50 dark:border-slate-800/50 shadow-xl bg-white/70 dark:bg-slate-900/60 backdrop-blur-md p-6">
+                <Card className="rounded-2xl border border-slate-900 bg-slate-950/40 p-6">
                   <form onSubmit={handleAddFriend} className="space-y-4">
                     <div className="space-y-1">
-                      <Label htmlFor="friend-tag" className="font-bold text-sm text-slate-700 dark:text-slate-350">
+                      <Label htmlFor="friend-tag" className="font-bold text-sm text-white">
                         Add Friend
                       </Label>
-                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                      <p className="text-xs text-slate-500">
                         You can search users by typing their exact **Username** (e.g. `Laksh2059`), **User Tag** (e.g. `0270`), or full tag combination (`Laksh2059#0270`).
                       </p>
                     </div>
@@ -323,12 +375,12 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
                         value={addFriendInput}
                         onChange={(e) => setAddFriendInput(e.target.value)}
                         disabled={isRequestSending}
-                        className="h-11 rounded-xl bg-slate-50/50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 text-sm focus-visible:ring-emerald-500 focus-visible:ring-1"
+                        className="h-11 rounded-xl bg-slate-950/40 border border-slate-900 text-sm focus-visible:ring-emerald-500 focus-visible:ring-1"
                       />
                       <Button
                         type="submit"
                         disabled={isRequestSending || !addFriendInput.trim()}
-                        className="h-11 px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold text-sm shadow-md"
+                        className="h-11 px-6 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-md"
                       >
                         {isRequestSending ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -344,7 +396,7 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
               {/* ONLINE TAB */}
               {activeTab === 'online' && (
                 onlineFriends.length === 0 ? (
-                  <div className="text-center py-16 text-slate-400 dark:text-slate-500 font-semibold text-xs tracking-wider">
+                  <div className="col-span-full text-center py-16 text-slate-500 font-semibold text-xs tracking-wider">
                     NO FRIENDS ONLINE CURRENTLY
                   </div>
                 ) : (
@@ -357,7 +409,7 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
               {/* ALL TAB */}
               {activeTab === 'all' && (
                 filteredFriends.length === 0 ? (
-                  <div className="text-center py-16 text-slate-400 dark:text-slate-500 font-semibold text-xs tracking-wider">
+                  <div className="col-span-full text-center py-16 text-slate-500 font-semibold text-xs tracking-wider">
                     NO FRIENDS ADDED YET
                   </div>
                 ) : (
@@ -373,7 +425,7 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
               {/* PENDING TAB */}
               {activeTab === 'pending' && (
                 pendingRequests.length === 0 ? (
-                  <div className="text-center py-16 text-slate-400 dark:text-slate-500 font-semibold text-xs tracking-wider">
+                  <div className="col-span-full text-center py-16 text-slate-500 font-semibold text-xs tracking-wider">
                     NO PENDING FRIEND REQUESTS
                   </div>
                 ) : (
@@ -397,7 +449,7 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
               {/* BLOCKED TAB */}
               {activeTab === 'blocked' && (
                 blockedUsers.length === 0 ? (
-                  <div className="text-center py-16 text-slate-400 dark:text-slate-500 font-semibold text-xs tracking-wider">
+                  <div className="col-span-full text-center py-16 text-slate-500 font-semibold text-xs tracking-wider">
                     NO BLOCKED USERS
                   </div>
                 ) : (
@@ -427,50 +479,57 @@ interface FriendRowProps {
 }
 
 const FriendRow: React.FC<FriendRowProps> = ({ profile, isOnline, onChat, onRemove, onBlock, isPendingAction }) => (
-  <div className="flex items-center justify-between p-4 bg-white/60 dark:bg-slate-950/20 border border-slate-200/50 dark:border-slate-850/50 rounded-2xl transition-all duration-200 shadow-sm hover:shadow">
-    <div className="flex items-center gap-3.5 min-w-0">
+  <motion.div 
+    layout
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -10 }}
+    className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 hover:border-emerald-500/20 p-5 rounded-2xl flex flex-col gap-4 group transition-all duration-300 hover:-translate-y-0.5 shadow-xl relative"
+  >
+    <div className="flex items-start gap-4">
       <div className="relative">
-        <Avatar className="h-11 w-11 border border-slate-100 dark:border-slate-800">
-          <AvatarImage src={profile.avatar_url || undefined} className="object-cover" />
-          <AvatarFallback className="bg-emerald-500 text-white font-bold">{profile.username.charAt(0).toUpperCase()}</AvatarFallback>
-        </Avatar>
-        <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ${isOnline ? 'bg-emerald-500' : 'bg-slate-350 dark:bg-slate-650'}`} />
+        <div className="w-16 h-16 rounded-2xl overflow-hidden border border-emerald-500/20 p-0.5 bg-gradient-to-br from-emerald-500/20 to-transparent">
+          <Avatar className="h-full w-full rounded-[14px]">
+            <AvatarImage src={profile.avatar_url || undefined} className="object-cover rounded-[14px]" />
+            <AvatarFallback className="bg-emerald-500 text-slate-950 font-bold rounded-[14px] flex items-center justify-center h-full w-full">
+              {profile.username.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+        </div>
+        {isOnline && (
+          <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-pulse animate-duration-[2000ms]" />
+        )}
       </div>
-      <div className="text-left min-w-0">
-        <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
-          {profile.username}
-          <span className="text-slate-400 font-semibold text-[10px] ml-1 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">
-            #{profile.user_tag}
-          </span>
-        </p>
-        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold uppercase mt-0.5 flex items-center gap-1">
-          {isOnline ? (
-            <>
-              <Wifi className="w-3 h-3 text-emerald-500" />
-              Online
-            </>
-          ) : (
-            <>
-              <WifiOff className="w-3 h-3" />
-              Offline
-            </>
-          )}
-        </p>
+      
+      <div className="flex-1 min-w-0 text-left">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-[16px] text-white truncate">{profile.username}</h3>
+          <span className="text-[10px] text-slate-500 font-semibold">{isOnline ? 'Active' : 'Offline'}</span>
+        </div>
+        <p className="text-[11px] text-emerald-400/80 font-mono tracking-wider">@{profile.username.toLowerCase()}#{profile.user_tag}</p>
+        <p className="text-xs text-slate-400 mt-2 italic line-clamp-1">"Away in the nebula..."</p>
       </div>
     </div>
 
-    <div className="flex gap-2">
-      <Button variant="ghost" size="icon" onClick={onChat} disabled={isPendingAction} className="h-9 w-9 rounded-xl hover:bg-emerald-500/10 hover:text-emerald-500 text-slate-500">
+    <div className="flex gap-2 pt-2 border-t border-slate-800/40">
+      <Button 
+        onClick={onChat} 
+        disabled={isPendingAction} 
+        className="flex-1 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 py-2.5 rounded-xl transition-all text-xs font-bold"
+      >
         <MessageSquare className="w-4 h-4" />
+        <span>Message</span>
       </Button>
-      <Button variant="ghost" size="icon" onClick={onBlock} disabled={isPendingAction} className="h-9 w-9 rounded-xl hover:bg-red-500/10 hover:text-red-500 text-slate-500">
-        <Ban className="w-4 h-4" />
-      </Button>
-      <Button variant="ghost" size="icon" onClick={onRemove} disabled={isPendingAction} className="h-9 w-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">
+      <Button 
+        onClick={onRemove} 
+        disabled={isPendingAction} 
+        className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white py-2.5 rounded-xl transition-all text-xs font-bold"
+      >
         <UserX className="w-4 h-4" />
+        <span>Remove</span>
       </Button>
     </div>
-  </div>
+  </motion.div>
 )
 
 interface PendingRowProps {
@@ -483,42 +542,66 @@ interface PendingRowProps {
 }
 
 const PendingRow: React.FC<PendingRowProps> = ({ request, isIncoming, onAccept, onReject, onCancel, isPendingAction }) => (
-  <div className="flex items-center justify-between p-4 bg-white/60 dark:bg-slate-950/20 border border-slate-200/50 dark:border-slate-850/50 rounded-2xl shadow-sm">
-    <div className="flex items-center gap-3.5 min-w-0">
-      <Avatar className="h-11 w-11 border border-slate-100 dark:border-slate-800">
-        <AvatarImage src={request.profile.avatar_url || undefined} className="object-cover" />
-        <AvatarFallback className="bg-emerald-500 text-white font-bold">{request.profile.username.charAt(0).toUpperCase()}</AvatarFallback>
-      </Avatar>
-      <div className="text-left min-w-0">
-        <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
-          {request.profile.username}
-          <span className="text-slate-400 font-semibold text-[10px] ml-1 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">
-            #{request.profile.user_tag}
-          </span>
-        </p>
-        <p className="text-[10px] text-slate-450 dark:text-slate-500 font-semibold mt-0.5">
-          {isIncoming ? 'Incoming Friend Request' : 'Outgoing Friend Request'}
+  <motion.div 
+    layout
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -10 }}
+    className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 p-5 rounded-2xl flex flex-col gap-4 relative overflow-hidden transition-all duration-300 hover:-translate-y-0.5 shadow-xl"
+  >
+    <div className="flex items-start gap-4">
+      <div className="w-16 h-16 rounded-2xl overflow-hidden border border-slate-800 p-0.5 bg-white/5">
+        <Avatar className="h-full w-full rounded-[14px]">
+          <AvatarImage src={request.profile.avatar_url || undefined} className="object-cover rounded-[14px]" />
+          <AvatarFallback className="bg-emerald-500 text-slate-950 font-bold rounded-[14px] flex items-center justify-center h-full w-full">
+            {request.profile.username.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+      </div>
+      
+      <div className="flex-1 min-w-0 text-left">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-[16px] text-white truncate">{request.profile.username}</h3>
+          <span className="text-[10px] text-slate-550 font-semibold">Pending</span>
+        </div>
+        <p className="text-[11px] text-emerald-400/80 font-mono tracking-wider">@{request.profile.username.toLowerCase()}#{request.profile.user_tag}</p>
+        <p className="text-xs text-slate-400 mt-2">
+          {isIncoming ? 'Incoming request' : 'Outgoing request'}
         </p>
       </div>
     </div>
 
-    <div className="flex gap-2">
+    <div className="flex gap-2 pt-2 border-t border-slate-800/40">
       {isIncoming ? (
         <>
-          <Button size="icon" variant="ghost" onClick={onAccept} disabled={isPendingAction} className="h-9 w-9 rounded-xl hover:bg-emerald-500/10 hover:text-emerald-500 text-slate-500">
+          <Button 
+            onClick={onAccept} 
+            disabled={isPendingAction} 
+            className="flex-1 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 py-2.5 rounded-xl transition-all text-xs font-bold"
+          >
             <Check className="w-4 h-4" />
+            <span>Accept</span>
           </Button>
-          <Button size="icon" variant="ghost" onClick={onReject} disabled={isPendingAction} className="h-9 w-9 rounded-xl hover:bg-red-500/10 hover:text-red-500 text-slate-500">
+          <Button 
+            onClick={onReject} 
+            disabled={isPendingAction} 
+            className="flex-1 flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 py-2.5 rounded-xl transition-all text-xs font-bold"
+          >
             <X className="w-4 h-4" />
+            <span>Reject</span>
           </Button>
         </>
       ) : (
-        <Button variant="ghost" onClick={onCancel} disabled={isPendingAction} className="h-9 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
-          Cancel Request
+        <Button 
+          onClick={onCancel} 
+          disabled={isPendingAction} 
+          className="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white py-2.5 rounded-xl transition-all text-xs font-bold"
+        >
+          <span>Cancel Request</span>
         </Button>
       )}
     </div>
-  </div>
+  </motion.div>
 )
 
 interface BlockedRowProps {
@@ -527,24 +610,33 @@ interface BlockedRowProps {
 }
 
 const BlockedRow: React.FC<BlockedRowProps> = ({ profile, isPendingAction }) => (
-  <div className="flex items-center justify-between p-4 bg-white/60 dark:bg-slate-950/20 border border-slate-200/50 dark:border-slate-850/50 rounded-2xl shadow-sm">
-    <div className="flex items-center gap-3.5 min-w-0">
-      <Avatar className="h-11 w-11 border border-slate-100 dark:border-slate-800">
-        <AvatarImage src={profile.avatar_url || undefined} className="object-cover" />
-        <AvatarFallback className="bg-red-500 text-white font-bold">{profile.username.charAt(0).toUpperCase()}</AvatarFallback>
-      </Avatar>
-      <div className="text-left min-w-0">
-        <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
-          {profile.username}
-          <span className="text-slate-400 font-semibold text-[10px] ml-1 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">
-            #{profile.user_tag}
+  <motion.div 
+    layout
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -10 }}
+    className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 p-5 rounded-2xl flex flex-col gap-4 relative overflow-hidden transition-all duration-300 hover:-translate-y-0.5 shadow-xl"
+  >
+    <div className="flex items-start gap-4">
+      <div className="w-16 h-16 rounded-2xl overflow-hidden border border-red-500/20 p-0.5 bg-white/5">
+        <Avatar className="h-full w-full rounded-[14px]">
+          <AvatarImage src={profile.avatar_url || undefined} className="object-cover rounded-[14px]" />
+          <AvatarFallback className="bg-red-500 text-slate-950 font-bold rounded-[14px] flex items-center justify-center h-full w-full">
+            {profile.username.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+      </div>
+      
+      <div className="flex-1 min-w-0 text-left">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-[16px] text-white truncate">{profile.username}</h3>
+          <span className="text-[10px] text-red-400 font-semibold flex items-center gap-1">
+            <ShieldAlert className="w-3.5 h-3.5" />
+            Blocked
           </span>
-        </p>
-        <p className="text-[10px] text-red-500/70 font-semibold mt-0.5 flex items-center gap-1">
-          <ShieldAlert className="w-3.5 h-3.5" />
-          Blocked
-        </p>
+        </div>
+        <p className="text-[11px] text-slate-500 font-mono tracking-wider">@{profile.username.toLowerCase()}#{profile.user_tag}</p>
       </div>
     </div>
-  </div>
+  </motion.div>
 )

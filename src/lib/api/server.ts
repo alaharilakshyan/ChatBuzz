@@ -34,24 +34,28 @@ export async function fetchServer(path: string, options: RequestInit = {}): Prom
         const setCookies = refreshResponse.headers.getSetCookie ? refreshResponse.headers.getSetCookie() : [];
         let newAccessToken = '';
         
-        setCookies.forEach((cookieStr) => {
-          const parts = cookieStr.split(';').map(p => p.trim());
-          const [nameValue, ...attrs] = parts;
-          const [name, value] = nameValue.split('=');
-          if (name === 'chatbuzz_token') newAccessToken = value;
-          
-          const opts: any = { path: '/' };
-          attrs.forEach(attr => {
-            const [k, v] = attr.split('=');
-            const key = k.toLowerCase();
-            if (key === 'path') opts.path = v;
-            else if (key === 'max-age') opts.maxAge = parseInt(v, 10);
-            else if (key === 'same-site') opts.sameSite = v.toLowerCase() as any;
-            else if (key === 'secure') opts.secure = true;
-            else if (key === 'httponly') opts.httpOnly = true;
+        try {
+          setCookies.forEach((cookieStr) => {
+            const parts = cookieStr.split(';').map(p => p.trim());
+            const [nameValue, ...attrs] = parts;
+            const [name, value] = nameValue.split('=');
+            if (name === 'chatbuzz_token') newAccessToken = value;
+            
+            const opts: any = { path: '/' };
+            attrs.forEach(attr => {
+              const [k, v] = attr.split('=');
+              const key = k.toLowerCase();
+              if (key === 'path') opts.path = v;
+              else if (key === 'max-age') opts.maxAge = parseInt(v, 10);
+              else if (key === 'same-site') opts.sameSite = v.toLowerCase() as any;
+              else if (key === 'secure') opts.secure = true;
+              else if (key === 'httponly') opts.httpOnly = true;
+            });
+            cookieStore.set(name, value, opts);
           });
-          cookieStore.set(name, value, opts);
-        });
+        } catch (cookieErr: any) {
+          console.warn('⚠️ fetchServer: Cannot write cookies during Server Component render (this is normal and client requests will update them):', cookieErr.message);
+        }
 
         // Retry the original request with the new access token
         const retryHeaders = {
@@ -66,15 +70,26 @@ export async function fetchServer(path: string, options: RequestInit = {}): Prom
         });
       } else {
         // Clear expired cookies
-        cookieStore.delete('chatbuzz_token');
-        cookieStore.delete('chatbuzz_refresh_token');
+        try {
+          cookieStore.delete('chatbuzz_token');
+          cookieStore.delete('chatbuzz_refresh_token');
+        } catch (deleteErr: any) {
+          console.warn('⚠️ fetchServer: Cannot delete cookies during Server Component render:', deleteErr.message);
+        }
       }
     } catch (err) {
       console.error('Server action auto-refresh failure:', err);
     }
   }
 
-  const data = await response.json();
+  let data: any = {};
+  const text = await response.text();
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (jsonErr) {
+    data = { error: text || 'An unexpected non-JSON response was returned from the server.' };
+  }
+
   if (!response.ok) {
     throw new Error(data.error || 'Server fetch to Express failed.');
   }

@@ -1,20 +1,86 @@
 import React from 'react'
-import { MessageCircle } from 'lucide-react'
+import { MessageSquare, Sparkles, Folder, Bookmark, Pin, Plus, Compass } from 'lucide-react'
 
 export default function WorkspaceIndexPage() {
   return (
-    <div className="flex items-center justify-center h-full p-6">
-      <div className="text-center max-w-sm">
-        <div className="relative mx-auto mb-6 w-24 h-24">
-          <div className="absolute inset-0 rounded-full bg-emerald-500 opacity-30 blur-2xl transition-colors duration-300" />
-          <div className="relative w-24 h-24 rounded-[32px] bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/60 dark:border-slate-700/50 flex items-center justify-center shadow-lg transition-colors duration-300">
-            <MessageCircle className="h-12 w-12 text-emerald-500" />
+    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center p-8 relative min-h-full bg-slate-950/30 selection:bg-emerald-500/20">
+      
+      {/* Decorative Blur Ambient Light */}
+      <div className="absolute inset-0 pointer-events-none opacity-20" style={{ background: 'radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.1) 0%, transparent 60%)' }} />
+
+      <div className="max-w-2xl w-full flex flex-col items-center text-center space-y-6 relative z-10">
+        
+        {/* Welcome Graphic Widget */}
+        <div className="w-20 h-20 relative animate-bounce duration-[2000ms]">
+          <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-xl animate-pulse" />
+          <div className="relative w-full h-full bg-slate-900/60 backdrop-blur-md rounded-2xl flex items-center justify-center border border-emerald-500/30 shadow-lg shadow-emerald-500/5">
+            <Sparkles className="h-10 w-10 text-emerald-400" />
           </div>
         </div>
-        <h3 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">Start a conversation</h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Select a friend or channel from the sidebar to begin chatting securely with end-to-end encryption.
+
+        <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-tight">
+          Welcome to your workspace
+        </h1>
+        
+        <p className="text-sm md:text-base text-slate-400 max-w-md leading-relaxed">
+          You're all caught up! Select a channel or friend from the sidebar to start a secure, real-time end-to-end encrypted conversation.
         </p>
+
+        <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+          <button className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 px-6 rounded-full transition-all duration-200 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.35)] flex items-center gap-2 text-sm active:scale-95">
+            <Plus className="w-4 h-4" />
+            <span>New Chat</span>
+          </button>
+          <button className="bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 px-6 rounded-full transition-all duration-200 flex items-center gap-2 border border-slate-800 text-sm">
+            <Compass className="w-4 h-4" />
+            <span>Browse Channels</span>
+          </button>
+        </div>
+
+        {/* Quick Actions & Recent Widget Section */}
+        <div className="w-full mt-12 pt-8 border-t border-slate-900 text-left">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">
+            Quick Actions &amp; Recent
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            {/* Widget 1: Recent Files */}
+            <div className="bg-slate-950/40 border border-slate-900 hover:border-emerald-500/10 p-5 rounded-2xl flex flex-col gap-4 cursor-pointer group transition-all duration-300 hover:-translate-y-0.5">
+              <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center group-hover:bg-emerald-500/10 transition-colors">
+                <Folder className="w-4 h-4 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">Recent Files</h4>
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">Access docs and assets shared in your channels.</p>
+              </div>
+            </div>
+
+            {/* Widget 2: Saved Clips */}
+            <div className="bg-slate-950/40 border border-slate-900 hover:border-emerald-500/10 p-5 rounded-2xl flex flex-col gap-4 cursor-pointer group transition-all duration-300 hover:-translate-y-0.5">
+              <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center group-hover:bg-emerald-500/10 transition-colors">
+                <Bookmark className="w-4 h-4 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">Saved Clips</h4>
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">Review your saved messages and media clips.</p>
+              </div>
+            </div>
+
+            {/* Widget 3: Pinned Threads */}
+            <div className="bg-slate-950/40 border border-slate-900 hover:border-emerald-500/10 p-5 rounded-2xl flex flex-col gap-4 cursor-pointer group transition-all duration-300 hover:-translate-y-0.5">
+              <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center group-hover:bg-emerald-500/10 transition-colors">
+                <Pin className="w-4 h-4 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">Pinned Threads</h4>
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">Important announcements and pinboards.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
       </div>
     </div>
   )

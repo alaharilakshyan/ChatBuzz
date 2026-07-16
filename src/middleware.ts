@@ -7,8 +7,9 @@ export function middleware(request: NextRequest) {
   // Define public paths
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')
   const isPublicApi = pathname.startsWith('/api/')
+  const isStaticFile = pathname.startsWith('/manifest.json') || pathname.startsWith('/sw.js') || pathname.startsWith('/favicon.ico') || pathname.startsWith('/uploads/')
 
-  if (isPublicApi) {
+  if (isPublicApi || isStaticFile) {
     return NextResponse.next()
   }
 

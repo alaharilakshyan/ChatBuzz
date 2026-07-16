@@ -1,39 +1,63 @@
 # ChatBuzz (TalkTime Modern Rebuild)
 
-A modern, secure, and real-time chat application migrated from a legacy stack (React/Vite, Express, MongoDB, Socket.IO) to a high-performance serverless stack.
+A modern, secure, and real-time chat application built with a Next.js frontend and a self-hosted Express/MongoDB backend.
 
 ## Tech Stack
-- **Framework:** Next.js 14+ (App Router, Server Actions, React Server Components)
-- **Database:** Supabase PostgreSQL (Fully Normalized Schema)
-- **Realtime:** Supabase Realtime Channels (Postgres Changes Replication & Presence Indicators)
-- **Storage:** Supabase Storage (Browser-to-Object upload streams)
+- **Frontend:** Next.js (App Router, Server Actions, React Server Components)
+- **Backend:** Node.js, Express, Socket.io (Realtime chat, Presence, and WebRTC signalling)
+- **Database:** MongoDB (via Mongoose ODM)
+- **Storage:** Cloudinary (Media upload streams for avatar, banner, and chat attachments)
 - **Styling:** Tailwind CSS & Radix UI (Dark-Theme Aesthetics)
 
 ## Project Structure
-- `/src/app` - App router segments (Authentication routes group `(auth)` & Application routes group `(main)`)
-- `/src/actions` - Server Actions managing auth flows, profile changes, and message insertions securely
-- `/src/components` - UI blocks, client components (Forms), sidebars, and chat viewport streams
-- `/src/types` - Strict database TS definitions matching our PostgreSQL tables
-- `/supabase` - Versioned schema migrations SQL directory
+- `/src` - Next.js client-side application segments, actions, and custom hooks.
+- `/server` - Express backend server containing schema models, socket controllers, services, and middleware.
 
 ## Setup and Getting Started
 
+### 1. Backend Server Setup
+Navigate into the `/server` directory:
 1. **Install Dependencies:**
    ```bash
    npm install
    ```
-
 2. **Configure Environment Variables:**
-   Create a `.env.local` file at the root:
+   Create a `.env` file at the `/server` root directory:
    ```env
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   PORT=4000
+   NODE_ENV=development
+   MONGODB_URI=mongodb+srv://alaharilakshyan_db_user:<db_password>@cluster0.vyqpvcc.mongodb.net/
+   CLIENT_URL=http://localhost:3000
+   JWT_SECRET=your_jwt_access_secret
+   REFRESH_TOKEN_SECRET=your_jwt_refresh_secret
+   CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+   CLOUDINARY_API_KEY=your_cloudinary_api_key
+   CLOUDINARY_API_SECRET=your_cloudinary_api_secret
    ```
+3. **Launch Server:**
+   - Development Mode (with ts-node-dev):
+     ```bash
+     npm run dev
+     ```
+   - Production Mode (compilation build):
+     ```bash
+     npm run build
+     npm start
+     ```
 
-3. **Database Schema Setup:**
-   Apply the migrations in `/supabase/migrations/` sequentially to your local or hosted Supabase database.
-
-4. **Launch Dev Server:**
+### 2. Frontend Application Setup
+Return to the project root directory:
+1. **Install Dependencies:**
+   ```bash
+   npm install
+   ```
+2. **Configure Environment Variables:**
+   Ensure `.env.local` contains correct backend targets:
+   ```env
+   NEXT_PUBLIC_EXPRESS_API_URL=http://localhost:4000/api/v1
+   NEXT_PUBLIC_SOCKET_SERVER_URL=http://localhost:4000
+   ```
+3. **Launch Application:**
    ```bash
    npm run dev
    ```

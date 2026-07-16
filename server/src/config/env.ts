@@ -48,12 +48,20 @@ if (data.NODE_ENV !== 'test') {
   }
 
   if (
-    !data.CLOUDINARY_CLOUD_NAME || data.CLOUDINARY_CLOUD_NAME === 'mock_cloud' ||
-    !data.CLOUDINARY_API_KEY || data.CLOUDINARY_API_KEY === 'mock_key' ||
-    !data.CLOUDINARY_API_SECRET || data.CLOUDINARY_API_SECRET === 'mock_secret'
+    !data.CLOUDINARY_CLOUD_NAME ||
+    !data.CLOUDINARY_API_KEY ||
+    !data.CLOUDINARY_API_SECRET
   ) {
-    console.error('❌ Environment Validation Error: Cloudinary settings are missing or configured with default mock values.');
+    console.error('❌ Environment Validation Error: Cloudinary configuration variables are missing.');
     process.exit(1);
+  }
+
+  if (
+    data.CLOUDINARY_CLOUD_NAME === 'mock_cloud' ||
+    data.CLOUDINARY_API_KEY === 'mock_key' ||
+    data.CLOUDINARY_API_SECRET === 'mock_secret'
+  ) {
+    console.warn('⚠️ Warning: Cloudinary is configured with default mock values. Media uploads will fall back to local storage.');
   }
 }
 

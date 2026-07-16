@@ -12,12 +12,12 @@ const Presence_1 = require("../models/Presence");
 function setupSockets(httpServer) {
     const io = new socket_io_1.Server(httpServer, {
         cors: {
-            origin: '*',
-            methods: ['GET', 'POST']
+            origin: env_1.env.CLIENT_URL,
+            methods: ['GET', 'POST'],
+            credentials: true
         }
     });
-    // Authentication Middleware for Sockets
-    io.use((socket, next) => {
+    const authMiddleware = (socket, next) => {
         let token;
         const cookieHeader = socket.handshake.headers.cookie;
         if (cookieHeader) {
@@ -42,9 +42,11 @@ function setupSockets(httpServer) {
         catch (err) {
             return next(new Error('Authentication error: Invalid token'));
         }
-    });
+    };
+    io.use(authMiddleware);
     // 1. Presence Namespace Handler
     const presenceNamespace = io.of('/presence');
+    presenceNamespace.use(authMiddleware);
     presenceNamespace.on('connection', async (socket) => {
         const userId = socket.data.user.id;
         logger_1.logger.info(`Presence: User connected ${userId}`);
@@ -59,6 +61,7 @@ function setupSockets(httpServer) {
     });
     // 2. Chat Namespace Handler
     const chatNamespace = io.of('/chat');
+    chatNamespace.use(authMiddleware);
     chatNamespace.on('connection', (socket) => {
         const userId = socket.data.user.id;
         // Join private room for user-specific DMs
@@ -92,6 +95,7 @@ function setupSockets(httpServer) {
     });
     // 3. WebRTC Call Namespace Handler
     const callsNamespace = io.of('/calls');
+    callsNamespace.use(authMiddleware);
     callsNamespace.on('connection', (socket) => {
         const userId = socket.data.user.id;
         socket.join(userId);

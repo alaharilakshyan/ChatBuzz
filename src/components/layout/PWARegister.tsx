@@ -7,6 +7,10 @@ export const PWARegister = () => {
   const { subscribeToPush } = usePushNotifications()
 
   useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('PWA ServiceWorker registration disabled in development mode.')
+      return
+    }
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       const handleRegister = async () => {
         try {

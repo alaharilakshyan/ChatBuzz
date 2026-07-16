@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
+import { fetchServer } from '@/lib/api/server'
 
 export async function updateLocationAction(lat: number, lng: number) {
   if (typeof lat !== 'number' || typeof lng !== 'number') {
@@ -12,46 +12,27 @@ export async function updateLocationAction(lat: number, lng: number) {
     return { error: 'Coordinates out of bounds' }
   }
 
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return { error: 'Unauthorized' }
+  try {
+    await fetchServer('/users/location', {
+      method: 'PATCH',
+      body: JSON.stringify({ latitude: lat, longitude: lng })
+    });
+    return { success: true }
+  } catch (err: any) {
+    console.error('UpdateLocationAction failure:', err)
+    return { error: err.message || 'Location update failed.' }
   }
-
-  // WKT (Well-Known Text) formatting is POINT(longitude latitude)
-  const wktPoint = `POINT(${lng} ${lat})`
-
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      last_location: wktPoint,
-      last_location_update: new Date().toISOString()
-    })
-    .eq('id', user.id)
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  return { success: true }
 }
 
 export async function clearLocationAction() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Unauthorized' }
-
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      last_location: null,
-      last_location_update: null
-    })
-    .eq('id', user.id)
-
-  if (error) {
-    return { error: error.message }
+  try {
+    await fetchServer('/users/location', {
+      method: 'PATCH',
+      body: JSON.stringify({ latitude: null, longitude: null })
+    });
+    return { success: true }
+  } catch (err: any) {
+    console.error('ClearLocationAction failure:', err)
+    return { error: err.message || 'Location clear failed.' }
   }
-
-  return { success: true }
 }

@@ -40,15 +40,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
 
-  // Avoid caching non-GET requests, API queries, Supabase rest services, and auth callbacks
+  // Avoid caching non-GET requests, API queries, and auth callbacks
   if (
     event.request.method !== 'GET' ||
     requestUrl.origin !== self.location.origin ||
     requestUrl.pathname.startsWith('/api') ||
     requestUrl.pathname.startsWith('/rest') ||
-    requestUrl.pathname.includes('/auth/') ||
-    requestUrl.pathname.includes('supabase') ||
-    requestUrl.host.includes('supabase')
+    requestUrl.pathname.includes('/auth/')
   ) {
     return;
   }

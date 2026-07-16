@@ -1,6 +1,6 @@
 import React from 'react'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/utils/supabase/server'
+import { fetchServer } from '@/lib/api/server'
 import { WorkspaceSidebar, Workspace } from '@/components/layout/WorkspaceSidebar'
 import { CallProvider } from '@/components/call/CallContext'
 import { CallRoom } from '@/components/call/CallRoom'
@@ -11,49 +11,33 @@ interface MainLayoutProps {
 }
 
 export default async function MainLayout({ children }: MainLayoutProps) {
-  const supabase = createClient()
+  let profile: any = null
+  let workspaces: Workspace[] = []
 
-  // 1. Get user session
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const profileData = await fetchServer('/users/me')
+    profile = {
+      id: profileData.userId._id || profileData.userId.id,
+      username: profileData.username,
+      avatar_url: profileData.avatarUrl || null,
+      banner_url: profileData.bannerUrl || null,
+      bio: profileData.description || null,
+      user_tag: profileData.userTag
+    }
 
-  if (!user) {
+    const workspacesList = await fetchServer('/workspaces')
+    workspaces = workspacesList.map((ws: any) => ({
+      id: ws._id || ws.id,
+      name: ws.name,
+      icon_url: ws.iconUrl || null
+    }))
+  } catch (err) {
+    console.error('MainLayout auth fetch error:', err)
     redirect('/login')
   }
 
-  // 2. Fetch user profile
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .is('deleted_at', null)
-    .single()
-
-  if (!profile) {
-    redirect('/login')
-  }
-
-  // 3. Fetch workspaces user is a member of
-  const { data: memberships } = await supabase
-    .from('workspace_members')
-    .select('workspace_id, workspaces(*)')
-    .eq('user_id', user.id)
-    .is('deleted_at', null)
-
-  const workspaces: Workspace[] = (memberships
-    ?.map((m: any) => m.workspaces)
-    .filter((ws: any) => ws !== null && ws.deleted_at === null) as unknown as Workspace[]) || []
-
-  // 4. Fetch user preferences to apply spacing density settings
-  const { data: settings } = await supabase
-    .from('user_settings')
-    .select('density')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  const density = settings?.density || 'comfortable'
-  const isCompact = density === 'compact'
+  const density = 'comfortable'
+  const isCompact = false
 
   return (
     <CallProvider

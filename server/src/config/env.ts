@@ -7,6 +7,7 @@ const envSchema = z.object({
   PORT: z.string().default('4000'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   MONGODB_URI: z.string().default('mongodb://localhost:27017/chatbuzz'),
+  CLIENT_URL: z.string().default('http://localhost:3000'),
   JWT_SECRET: z.string().default('chatbuzz_local_secret_default_key_32_bytes_long_required'),
   JWT_EXPIRES_IN: z.string().default('15m'),
   REFRESH_TOKEN_SECRET: z.string().default('chatbuzz_local_refresh_secret_default_key_32_bytes_long'),
@@ -21,6 +22,13 @@ const envSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().default('BJnbSPP7mFP1stPwyh4yEeIzh3tWTE6cAvq56Pl2oqX18QJJCen4N8gy_L_FpHQVlUbhfpXA--DH75fTGCngGqY'),
   VAPID_PRIVATE_KEY: z.string().default('AeqH50QGvb3gmwychu7diFsWKLKUa4iFQ-aM_OGbjok'),
   VAPID_SUBJECT: z.string().default('mailto:admin@chatbuzz.app')
+}).refine((data) => {
+  if (data.AUTH_PROVIDER === 'auth0') {
+    return !!data.AUTH0_DOMAIN && !!data.AUTH0_AUDIENCE;
+  }
+  return true;
+}, {
+  message: "AUTH0_DOMAIN and AUTH0_AUDIENCE are required when AUTH_PROVIDER is 'auth0'"
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -30,5 +38,25 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const env = parsed.data;
+const data = parsed.data;
+
+// Strict credentials checks for development and production
+if (data.NODE_ENV !== 'test') {
+  if (data.MONGODB_URI.includes('<db_password>')) {
+    console.error('❌ Environment Validation Error: MONGODB_URI contains the database password placeholder "<db_password>".');
+    process.exit(1);
+  }
+
+  if (
+    !data.CLOUDINARY_CLOUD_NAME || data.CLOUDINARY_CLOUD_NAME === 'mock_cloud' ||
+    !data.CLOUDINARY_API_KEY || data.CLOUDINARY_API_KEY === 'mock_key' ||
+    !data.CLOUDINARY_API_SECRET || data.CLOUDINARY_API_SECRET === 'mock_secret'
+  ) {
+    console.error('❌ Environment Validation Error: Cloudinary settings are missing or configured with default mock values.');
+    process.exit(1);
+  }
+}
+
+export const env = data;
 export type Env = z.infer<typeof envSchema>;
+

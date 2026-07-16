@@ -50,4 +50,16 @@ export class ChannelService {
 
     return visibleChannels;
   }
+
+  async getChannelById(channelId: string | Types.ObjectId, userId: string | Types.ObjectId): Promise<IChannel> {
+    const channel = await this.channelRepository.findById(channelId);
+    if (!channel) {
+      throw new NotFoundError('Channel not found.');
+    }
+    const member = await this.workspaceRepository.findMember(channel.workspaceId, userId);
+    if (!member) {
+      throw new ForbiddenError('You are not a member of this workspace.');
+    }
+    return channel;
+  }
 }

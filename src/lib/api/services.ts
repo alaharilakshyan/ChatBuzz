@@ -1,129 +1,67 @@
-import { BACKEND_PROVIDER, fetchExpress } from './client';
-import { createBrowserClient } from '@/utils/supabase/client';
-
-export const authService = {
-  async register(email: string, password: string, username: string) {
-    if (BACKEND_PROVIDER === 'express') {
-      const data = await fetchExpress('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({ email, password, username })
-      });
-      localStorage.setItem('chatbuzz_token', data.token);
-      return data.user;
-    } else {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
-      return data.user;
-    }
-  },
-
-  async login(email: string, password: string) {
-    if (BACKEND_PROVIDER === 'express') {
-      const data = await fetchExpress('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password })
-      });
-      localStorage.setItem('chatbuzz_token', data.token);
-      return data.user;
-    } else {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      return data.user;
-    }
-  },
-
-  async logout() {
-    if (BACKEND_PROVIDER === 'express') {
-      localStorage.removeItem('chatbuzz_token');
-    } else {
-      const supabase = createBrowserClient();
-      await supabase.auth.signOut();
-    }
-  }
-};
+import { fetchExpress, EXPRESS_API_URL } from './client';
 
 export const workspaceService = {
   async create(name: string, iconUrl?: string | null) {
-    if (BACKEND_PROVIDER === 'express') {
-      return await fetchExpress('/workspaces', {
-        method: 'POST',
-        body: JSON.stringify({ name, iconUrl })
-      });
-    } else {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase.from('workspaces').insert([{ name, icon_url: iconUrl }]).select().single();
-      if (error) throw error;
-      return data;
-    }
+    return await fetchExpress('/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({ name, iconUrl })
+    });
   },
 
   async list() {
-    if (BACKEND_PROVIDER === 'express') {
-      return await fetchExpress('/workspaces');
-    } else {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase.from('workspaces').select('*');
-      if (error) throw error;
-      return data;
-    }
+    return await fetchExpress('/workspaces');
   }
 };
 
 export const messageService = {
   async sendChannelMessage(channelId: string, content: string, replyToId?: string) {
-    if (BACKEND_PROVIDER === 'express') {
-      return await fetchExpress('/messages/channel', {
-        method: 'POST',
-        body: JSON.stringify({ channelId, content, replyToId })
-      });
-    } else {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase.from('messages').insert([{ channel_id: channelId, content, reply_to_id: replyToId }]).select().single();
-      if (error) throw error;
-      return data;
-    }
+    return await fetchExpress('/messages/channel', {
+      method: 'POST',
+      body: JSON.stringify({ channelId, content, replyToId })
+    });
   },
 
   async sendDM(recipientId: string, content: string, replyToId?: string) {
-    if (BACKEND_PROVIDER === 'express') {
-      return await fetchExpress('/messages/dm', {
-        method: 'POST',
-        body: JSON.stringify({ recipientId, content, replyToId })
-      });
-    } else {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase.from('messages').insert([{ recipient_id: recipientId, content, reply_to_id: replyToId }]).select().single();
-      if (error) throw error;
-      return data;
-    }
+    return await fetchExpress('/messages/dm', {
+      method: 'POST',
+      body: JSON.stringify({ recipientId, content, replyToId })
+    });
   }
 };
 
 export const friendService = {
   async sendRequest(targetTag: string) {
-    if (BACKEND_PROVIDER === 'express') {
-      return await fetchExpress('/friends/request', {
-        method: 'POST',
-        body: JSON.stringify({ targetTag })
-      });
-    } else {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase.rpc('send_friend_request_by_tag', { target_tag: targetTag });
-      if (error) throw error;
-      return data;
-    }
+    return await fetchExpress('/friends/request', {
+      method: 'POST',
+      body: JSON.stringify({ targetTag })
+    });
   },
 
   async getFriends() {
-    if (BACKEND_PROVIDER === 'express') {
-      return await fetchExpress('/friends');
-    } else {
-      const supabase = createBrowserClient();
-      const { data, error } = await supabase.from('friendships').select('*');
-      if (error) throw error;
-      return data;
+    return await fetchExpress('/friends');
+  }
+};
+
+export const storageService = {
+  async uploadMedia(file: File, folder: 'avatars' | 'banners' | 'backgrounds' | 'workspace-icons' | 'stories' | 'attachments' | 'voice-notes') {
+    const formData = new FormData();
+    // Map file key based on folder target
+    formData.append(
+      folder === 'avatars' ? 'avatar' : folder === 'banners' ? 'banner' : 'file',
+      file
+    );
+
+    const url = `${EXPRESS_API_URL}${folder === 'avatars' ? '/users/avatar' : '/users/banner'}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Upload failed.');
     }
+    return data.data; // contains standard upload response envelope (url, publicId, size, extension)
   }
 };

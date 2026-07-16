@@ -15,9 +15,24 @@ export function setupSockets(httpServer: HTTPServer): SocketIOServer {
 
   // Authentication Middleware for Sockets
   io.use((socket, next) => {
-    const token = socket.handshake.auth.token || socket.handshake.query.token;
+    let token: string | undefined;
+
+    const cookieHeader = socket.handshake.headers.cookie;
+    if (cookieHeader) {
+      const cookies = cookieHeader.split(';').reduce((acc, c) => {
+        const parts = c.split('=');
+        acc[parts[0].trim()] = parts[1];
+        return acc;
+      }, {} as Record<string, string>);
+      token = cookies['chatbuzz_token'];
+    }
+
     if (!token) {
-      return next(new Error('Authentication error: Missing token'));
+      token = (socket.handshake.auth as any)?.token || (socket.handshake.query as any)?.token;
+    }
+
+    if (!token) {
+      return next(new Error('Authentication error: Missing token cookie'));
     }
 
     try {

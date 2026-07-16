@@ -1,27 +1,23 @@
 import React from 'react'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/utils/supabase/server'
+import { fetchServer } from '@/lib/api/server'
 import { ProfileEditForm } from '@/components/profile/ProfileEditForm'
 
 export default async function ProfilePage() {
-  const supabase = createClient()
+  let profile: any = null
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .is('deleted_at', null)
-    .single()
-
-  if (!profile) {
+  try {
+    const profileData = await fetchServer('/users/me')
+    profile = {
+      id: profileData.userId._id || profileData.userId.id,
+      username: profileData.username,
+      avatar_url: profileData.avatarUrl || null,
+      banner_url: profileData.bannerUrl || null,
+      bio: profileData.description || null,
+      user_tag: profileData.userTag
+    }
+  } catch (err) {
+    console.error('ProfilePage fetch error:', err)
     redirect('/login')
   }
 

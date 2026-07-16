@@ -15,7 +15,7 @@ export class UserService {
     return crypto.pbkdf2Sync(password, 'salt_chatbuzz', 1000, 64, 'sha512').toString('hex');
   }
 
-  async registerLocal(email: string, password: string, username: string): Promise<{ user: IUser; token: string }> {
+  async registerLocal(email: string, password: string, username: string): Promise<{ user: IUser; token: string; refreshToken: string }> {
     const existing = await this.userRepository.findByEmail(email);
     if (existing) {
       throw new ConflictError('User with this email already exists.');
@@ -42,12 +42,13 @@ export class UserService {
     });
 
     const token = this.generateToken(user);
+    const refreshToken = this.generateRefreshToken(user);
     logger.info(`User registered successfully: ${email}`);
 
-    return { user, token };
+    return { user, token, refreshToken };
   }
 
-  async loginLocal(email: string, password: string): Promise<{ user: IUser; token: string }> {
+  async loginLocal(email: string, password: string): Promise<{ user: IUser; token: string; refreshToken: string }> {
     const user = await this.userRepository.findByEmail(email);
     if (!user || !user.passwordHash) {
       throw new AuthenticationError('Invalid email or password.');
@@ -59,9 +60,10 @@ export class UserService {
     }
 
     const token = this.generateToken(user);
+    const refreshToken = this.generateRefreshToken(user);
     logger.info(`User logged in successfully: ${email}`);
 
-    return { user, token };
+    return { user, token, refreshToken };
   }
 
   private generateToken(user: IUser): string {
@@ -69,6 +71,14 @@ export class UserService {
       { id: user._id.toString(), email: user.email },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN as any }
+    );
+  }
+
+  generateRefreshToken(user: IUser): string {
+    return jwt.sign(
+      { id: user._id.toString(), email: user.email },
+      env.REFRESH_TOKEN_SECRET,
+      { expiresIn: env.REFRESH_TOKEN_EXPIRES_IN as any }
     );
   }
 }

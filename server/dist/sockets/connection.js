@@ -18,9 +18,21 @@ function setupSockets(httpServer) {
     });
     // Authentication Middleware for Sockets
     io.use((socket, next) => {
-        const token = socket.handshake.auth.token || socket.handshake.query.token;
+        let token;
+        const cookieHeader = socket.handshake.headers.cookie;
+        if (cookieHeader) {
+            const cookies = cookieHeader.split(';').reduce((acc, c) => {
+                const parts = c.split('=');
+                acc[parts[0].trim()] = parts[1];
+                return acc;
+            }, {});
+            token = cookies['chatbuzz_token'];
+        }
         if (!token) {
-            return next(new Error('Authentication error: Missing token'));
+            token = socket.handshake.auth?.token || socket.handshake.query?.token;
+        }
+        if (!token) {
+            return next(new Error('Authentication error: Missing token cookie'));
         }
         try {
             const decoded = jsonwebtoken_1.default.verify(token, env_1.env.JWT_SECRET);

@@ -1,48 +1,25 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
+import { fetchServer } from '@/lib/api/server'
 
 export async function updateProfileAction(state: any, formData: FormData) {
   const username = formData.get('username') as string
   const bio = formData.get('bio') as string
-  const avatarUrl = formData.get('avatar_url') as string
-  const bannerUrl = formData.get('banner_url') as string
-
-  const supabase = createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'Unauthorized' }
-  }
 
   if (!username || !username.trim()) {
     return { error: 'Username is required' }
   }
 
-  const updatePayload: any = {
-    username: username.trim(),
-    bio: bio ? bio.trim() : null,
+  try {
+    await fetchServer('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        username: username.trim(),
+        description: bio ? bio.trim() : null
+      })
+    })
+    return { success: true }
+  } catch (err: any) {
+    return { error: err.message || 'Profile update failed.' }
   }
-
-  if (avatarUrl !== undefined && avatarUrl !== '') {
-    updatePayload.avatar_url = avatarUrl.trim()
-  }
-
-  if (bannerUrl !== undefined && bannerUrl !== '') {
-    updatePayload.banner_url = bannerUrl.trim()
-  }
-
-  const { error } = await supabase
-    .from('profiles')
-    .update(updatePayload)
-    .eq('id', user.id)
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  return { success: true }
 }

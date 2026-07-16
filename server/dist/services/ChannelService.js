@@ -38,5 +38,16 @@ class ChannelService {
         }
         return visibleChannels;
     }
+    async getChannelById(channelId, userId) {
+        const channel = await this.channelRepository.findById(channelId);
+        if (!channel) {
+            throw new error_1.NotFoundError('Channel not found.');
+        }
+        const member = await this.workspaceRepository.findMember(channel.workspaceId, userId);
+        if (!member) {
+            throw new error_1.ForbiddenError('You are not a member of this workspace.');
+        }
+        return channel;
+    }
 }
 exports.ChannelService = ChannelService;

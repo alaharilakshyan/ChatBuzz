@@ -60,6 +60,12 @@ export class UserController {
     const start = Date.now();
 
     try {
+      if (latitude === null || longitude === null) {
+        await Location.deleteOne({ userId: new Types.ObjectId(userId) });
+        logOperation('UPDATE_USER_LOCATION', userId, undefined, 'SUCCESS', Date.now() - start);
+        return success(res, 'User location cleared successfully.', null);
+      }
+
       const location = await Location.findOneAndUpdate(
         { userId: new Types.ObjectId(userId) },
         { 

@@ -25,7 +25,7 @@ export class StoryService {
     });
   }
 
-  async getActiveFeed(userId: string | Types.ObjectId): Promise<IStory[]> {
+  async getActiveFeed(userId: string | Types.ObjectId): Promise<any[]> {
     const friendships = await this.friendshipRepository.findFriendships(userId);
     const targetUserIds: (string | Types.ObjectId)[] = [userId];
 
@@ -34,7 +34,30 @@ export class StoryService {
       targetUserIds.push(otherId);
     }
 
-    return await this.storyRepository.findActiveStories(targetUserIds);
+    const stories = await this.storyRepository.findActiveStories(targetUserIds);
+    const enriched = [];
+    
+    // Dynamically import Profile model to get profiles details
+    const { Profile } = await import('../models/Profile');
+    for (const story of stories) {
+      const profile = await Profile.findOne({ userId: story.userId });
+      enriched.push({
+        id: story._id || story.id,
+        user_id: story.userId,
+        media_url: story.mediaUrl,
+        media_type: story.mediaType,
+        media_extension: story.mediaExtension,
+        caption: story.caption,
+        created_at: story.createdAt,
+        expires_at: story.expiresAt,
+        profiles: {
+          username: profile?.username || 'Unknown User',
+          avatar_url: profile?.avatarUrl || null
+        }
+      });
+    }
+
+    return enriched;
   }
 
   async viewStory(storyId: string | Types.ObjectId, userId: string | Types.ObjectId): Promise<void> {

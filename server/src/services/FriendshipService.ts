@@ -87,11 +87,21 @@ export class FriendshipService {
     const friendships = await this.friendshipRepository.findFriendships(userId);
     const friendProfiles = [];
 
+    const { Location } = await import('../models/Location');
+
     for (const friendship of friendships) {
       const otherId = friendship.user1Id.toString() === userId.toString() ? friendship.user2Id : friendship.user1Id;
       const profile = await this.profileRepository.findByUserId(otherId);
       if (profile) {
-        friendProfiles.push(profile);
+        const plainProfile = (profile as any).toObject ? (profile as any).toObject() : profile;
+        const loc = await Location.findOne({ userId: otherId });
+        if (loc && loc.location && loc.location.coordinates) {
+          plainProfile.last_location = {
+            coordinates: loc.location.coordinates
+          };
+          plainProfile.last_location_update = loc.updatedAt;
+        }
+        friendProfiles.push(plainProfile);
       }
     }
 
@@ -102,5 +112,48 @@ export class FriendshipService {
     await this.friendshipRepository.createBlock(blockerId, blockedId);
     // Remove active friendship if exists
     await this.friendshipRepository.removeFriendship(blockerId, blockedId);
+  }
+
+  async removeFriend(userId: string | Types.ObjectId, friendId: string | Types.ObjectId): Promise<void> {
+    await this.friendshipRepository.removeFriendship(userId, friendId);
+  }
+
+  async cancelRequest(requestId: string | Types.ObjectId, userId: string | Types.ObjectId): Promise<void> {
+    const request = await this.friendshipRepository.findFriendRequestById(requestId);
+    if (!request || request.status !== 'pending') {
+      throw new NotFoundError('Active friend request not found.');
+    }
+    if (request.requesterId.toString() !== userId.toString()) {
+      throw new ForbiddenError('You are not authorized to cancel this request.');
+    }
+    await FriendRequest.findByIdAndUpdate(requestId, { deletedAt: new Date() });
+  }
+
+  async getFriendRequests(userId: string | Types.ObjectId): Promise<any[]> {
+    const requests = await this.friendshipRepository.findFriendRequests(userId);
+    const enriched = [];
+    for (const req of requests) {
+      const otherId = req.requesterId.toString() === userId.toString() ? req.recipientId : req.requesterId;
+      const profile = await this.profileRepository.findByUserId(otherId);
+      enriched.push({
+        id: req._id || req.id,
+        requester_id: req.requesterId,
+        recipient_id: req.recipientId,
+        status: req.status,
+        created_at: req.createdAt,
+        profile
+      });
+    }
+    return enriched;
+  }
+
+  async getBlockedList(userId: string | Types.ObjectId): Promise<any[]> {
+    const blocks = await this.friendshipRepository.findBlocks(userId);
+    const profiles = [];
+    for (const b of blocks) {
+      const profile = await this.profileRepository.findByUserId(b.blockedId);
+      if (profile) profiles.push(profile);
+    }
+    return profiles;
   }
 }

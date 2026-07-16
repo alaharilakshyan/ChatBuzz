@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MessageController = void 0;
 const MessageService_1 = require("../services/MessageService");
+const Profile_1 = require("../models/Profile");
 const logger_1 = require("../utils/logger");
 const response_1 = require("../utils/response");
 class MessageController {
@@ -12,6 +13,23 @@ class MessageController {
         const start = Date.now();
         try {
             const message = await this.messageService.sendChannelMessage(senderId, channelId, content, attachments, replyToId);
+            // Populate sender profile details for realtime UI consumption
+            const profile = await Profile_1.Profile.findOne({ userId: senderId });
+            const formattedMsg = {
+                id: message._id || message.id,
+                sender_id: senderId,
+                channel_id: channelId,
+                content: content || '',
+                created_at: message.createdAt || new Date().toISOString(),
+                sender: {
+                    username: profile?.username || 'Unknown User',
+                    avatar_url: profile?.avatarUrl || null
+                }
+            };
+            const io = req.app.get('io');
+            if (io) {
+                io.of('/chat').to(`channel:${channelId}`).emit('message_received', formattedMsg);
+            }
             (0, logger_1.logOperation)('SEND_CHANNEL_MESSAGE', senderId, undefined, 'SUCCESS', Date.now() - start);
             return (0, response_1.created)(res, 'Channel message sent successfully.', message);
         }
@@ -26,6 +44,23 @@ class MessageController {
         const start = Date.now();
         try {
             const message = await this.messageService.sendDM(senderId, recipientId, content, attachments, replyToId);
+            const profile = await Profile_1.Profile.findOne({ userId: senderId });
+            const formattedMsg = {
+                id: message._id || message.id,
+                sender_id: senderId,
+                receiver_id: recipientId,
+                content: content || '',
+                created_at: message.createdAt || new Date().toISOString(),
+                sender: {
+                    username: profile?.username || 'Unknown User',
+                    avatar_url: profile?.avatarUrl || null
+                }
+            };
+            const io = req.app.get('io');
+            if (io) {
+                // Emit to receiver's private room and sender's private room (tab sync)
+                io.of('/chat').to(recipientId).to(senderId).emit('message_received', formattedMsg);
+            }
             (0, logger_1.logOperation)('SEND_DM_MESSAGE', senderId, undefined, 'SUCCESS', Date.now() - start);
             return (0, response_1.created)(res, 'DM message sent successfully.', message);
         }

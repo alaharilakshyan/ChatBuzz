@@ -108,18 +108,25 @@ export class MessageService {
 
   private async enrichMessages(messages: IMessage[]): Promise<any[]> {
     const enriched = [];
+    const { Profile } = await import('../models/Profile');
     for (const msg of messages) {
       const attachments = await this.messageRepository.findAttachments(msg._id);
       const reactions = await this.messageRepository.findReactions(msg._id);
       const reads = await this.messageRepository.findReads(msg._id);
       const deliveries = await this.messageRepository.findDeliveries(msg._id);
       
+      const profile = await Profile.findOne({ userId: msg.senderId });
+      
       enriched.push({
         ...msg.toObject(),
         attachments,
         reactions,
         reads,
-        deliveries
+        deliveries,
+        sender: {
+          username: profile?.username || 'Unknown User',
+          avatar_url: profile?.avatarUrl || null
+        }
       });
     }
     return enriched;

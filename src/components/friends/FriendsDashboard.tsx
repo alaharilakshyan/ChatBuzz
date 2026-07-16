@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
+import { presenceSocket } from '@/lib/socket/client'
 import { useToast } from '@/hooks/use-toast'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -75,7 +75,6 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
 }) => {
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
 
   const [activeTab, setActiveTab] = useState<TabType>('online')
   const [friends, setFriends] = useState<FriendProfile[]>(initialFriends)
@@ -91,34 +90,27 @@ export const FriendsDashboard: React.FC<FriendsDashboardProps> = ({
   const [isRequestSending, setIsRequestSending] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  // 1. Initialize Supabase Realtime Presence Channel
+  // 1. Initialize Socket.IO Realtime Presence Channel
   useEffect(() => {
-    const presenceChannel = supabase.channel('online-users', {
-      config: {
-        presence: {
-          key: userId,
-        },
-      },
+    const presence = presenceSocket
+    if (!presence.connected) presence.connect()
+
+    presence.emit('track_user', {
+      userId,
+      online_at: new Date().toISOString()
     })
 
-    presenceChannel
-      .on('presence', { event: 'sync' }, () => {
-        const state = presenceChannel.presenceState()
-        const activeIds = Object.keys(state)
-        setOnlineUserIds(activeIds)
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({
-            online_at: new Date().toISOString(),
-          })
-        }
-      })
+    const handlePresenceSync = (usersList: any[]) => {
+      const activeIds = usersList.map((u) => u.userId)
+      setOnlineUserIds(activeIds)
+    }
+
+    presence.on('presence_sync', handlePresenceSync)
 
     return () => {
-      presenceChannel.unsubscribe()
+      presence.off('presence_sync', handlePresenceSync)
     }
-  }, [supabase, userId])
+  }, [userId])
 
   // Filters
   const filteredFriends = friends.filter((f) =>

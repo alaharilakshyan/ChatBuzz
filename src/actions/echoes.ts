@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
+import { fetchServer } from '@/lib/api/server'
 import { revalidatePath } from 'next/cache'
 
 export async function createStoryAction(
@@ -13,29 +13,21 @@ export async function createStoryAction(
     return { error: 'Media URL is required' }
   }
 
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return { error: 'Unauthorized' }
+  try {
+    const data = await fetchServer('/stories', {
+      method: 'POST',
+      body: JSON.stringify({
+        mediaUrl,
+        mediaType,
+        mediaExtension,
+        caption: caption || null
+      })
+    });
+
+    revalidatePath('/friends')
+    return { success: true, story: data }
+  } catch (err: any) {
+    console.error('CreateStoryAction failure:', err)
+    return { error: err.message || 'Story publishing failed.' }
   }
-
-  const { data, error } = await supabase
-    .from('stories')
-    .insert({
-      user_id: user.id,
-      media_url: mediaUrl,
-      caption: caption || null,
-      created_by: user.id,
-      media_type: mediaType,
-      media_extension: mediaExtension
-    })
-    .select()
-    .single()
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  revalidatePath('/friends')
-  return { success: true, story: data }
 }

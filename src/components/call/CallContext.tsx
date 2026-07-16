@@ -1,8 +1,7 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect, useRef, useTransition } from 'react'
-import { createClient } from '@/utils/supabase/client'
-import { RealtimeChannel } from '@supabase/supabase-js'
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
+import { callsSocket } from '@/lib/socket/client'
 import { useMediaDevices } from '@/hooks/useMediaDevices'
 import { useWebRTC } from '@/hooks/useWebRTC'
 import { DevicePrecheckModal } from './DevicePrecheckModal'
@@ -15,7 +14,7 @@ export type CallType = 'audio' | 'video'
 interface CallContextType {
   callId: string | null
   callState: CallState
-  callType: CallState // Wait, callType is CallType
+  callType: CallState // Compatibility mapper
   callTypeActual: CallType
   callerId: string | null
   callerName: string
@@ -38,7 +37,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
   currentUsername,
   currentUserAvatar,
 }) => {
-  const supabase = createClient()
   const { toast } = useToast()
 
   // Track call start time for duration logs
@@ -73,8 +71,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
   } = useWebRTC(currentUserId)
 
   // Subscriptions & Channels
-  const globalCallChannelRef = useRef<RealtimeChannel | null>(null)
-  const activeCallChannelRef = useRef<RealtimeChannel | null>(null)
   const targetRecipientIdRef = useRef<string | null>(null)
 
   // Ringtone synthesizer Audio references
@@ -99,7 +95,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
       const osc2 = ctx.createOscillator()
       const gain = ctx.createGain()
 
-      // Standard North American telephone ring tone mix frequencies (440Hz + 480Hz)
+      // Mix frequencies (440Hz + 480Hz)
       osc1.frequency.setValueAtTime(440, ctx.currentTime)
       osc2.frequency.setValueAtTime(480, ctx.currentTime)
 
@@ -113,7 +109,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
       osc2.start()
 
       let isOn = true
-      // 1.5s beep sound, 2s silence loop
       const ringLoop = setInterval(() => {
         if (ctx.state === 'closed') {
           clearInterval(ringLoop)
@@ -151,65 +146,72 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
   useEffect(() => {
     if (!currentUserId) return
 
-    const channel = supabase.channel(`user-calls:${currentUserId}`)
-    globalCallChannelRef.current = channel
+    const calls = callsSocket
+    if (!calls.connected) calls.connect()
 
-    channel
-      .on('broadcast', { event: 'incoming_call' }, ({ payload }) => {
-        // Prevent call interruptions if user is already occupied
-        if (callState !== 'idle') {
-          console.log('User occupied, rejecting incoming call.')
-          return
-        }
+    // Join personal calls room
+    calls.emit('join_room', { roomId: `user-calls:${currentUserId}` })
 
-        console.log('Incoming call received:', payload)
-        setCallId(payload.callId)
-        setCallState('ringing')
-        setCallType(payload.type)
-        setCallerId(payload.callerId)
-        setCallerName(payload.callerName)
-        setIncomingOffer(payload.offer)
-        startRingtone()
-      })
-      .on('broadcast', { event: 'call_accepted' }, ({ payload }) => {
-        if (payload.callId !== callId) return
-        console.log('Outgoing call accepted by peer:', payload)
-        stopRingtone()
-        setCallState('active')
-        callStartTimeRef.current = Date.now()
-      })
-      .on('broadcast', { event: 'call_declined' }, ({ payload }) => {
-        if (payload.callId !== callId) return
-        console.log('Outgoing call declined by peer:', payload)
-        toast({
-          title: 'Call Declined',
-          description: `${callerName || 'Recipient'} declined your call.`,
-          variant: 'destructive',
-        })
-        stopRingtone()
-        resetCallState()
-      })
-      .on('broadcast', { event: 'call_ended' }, ({ payload }) => {
-        if (payload.callId !== callId) return
-        console.log('Active call ended by remote peer:', payload)
-        toast({
-          title: 'Call Ended',
-          description: 'The call was ended by the remote peer.',
-        })
-        stopRingtone()
-        resetCallState()
-      })
+    const handleIncomingCall = (payload: any) => {
+      if (callState !== 'idle') {
+        console.log('User occupied, rejecting incoming call.')
+        return
+      }
+      console.log('Incoming call received (Socket):', payload)
+      setCallId(payload.callId)
+      setCallState('ringing')
+      setCallType(payload.type)
+      setCallerId(payload.callerId)
+      setCallerName(payload.callerName)
+      setIncomingOffer(payload.offer)
+      startRingtone()
+    }
 
-    channel.subscribe((status) => {
-      console.log(`Global User Call Channel subscription:`, status)
-    })
+    const handleCallAccepted = (payload: any) => {
+      if (payload.callId !== callId) return
+      console.log('Outgoing call accepted by peer (Socket):', payload)
+      stopRingtone()
+      setCallState('active')
+      callStartTimeRef.current = Date.now()
+    }
+
+    const handleCallDeclined = (payload: any) => {
+      if (payload.callId !== callId) return
+      console.log('Outgoing call declined by peer (Socket):', payload)
+      toast({
+        title: 'Call Declined',
+        description: `${callerName || 'Recipient'} declined your call.`,
+        variant: 'destructive',
+      })
+      stopRingtone()
+      resetCallState()
+    }
+
+    const handleCallEnded = (payload: any) => {
+      if (payload.callId !== callId) return
+      console.log('Active call ended by remote peer (Socket):', payload)
+      toast({
+        title: 'Call Ended',
+        description: 'The call was ended by the remote peer.',
+      })
+      stopRingtone()
+      resetCallState()
+    }
+
+    calls.on('incoming_call', handleIncomingCall)
+    calls.on('call_accepted', handleCallAccepted)
+    calls.on('call_declined', handleCallDeclined)
+    calls.on('call_ended', handleCallEnded)
 
     return () => {
-      channel.unsubscribe()
-      globalCallChannelRef.current = null
+      calls.emit('leave_room', { roomId: `user-calls:${currentUserId}` })
+      calls.off('incoming_call', handleIncomingCall)
+      calls.off('call_accepted', handleCallAccepted)
+      calls.off('call_declined', handleCallDeclined)
+      calls.off('call_ended', handleCallEnded)
       stopRingtone()
     }
-  }, [currentUserId, callState, callId, supabase])
+  }, [currentUserId, callState, callId])
 
   // Watch connectionState changes to trigger toasts on failures/disconnects
   useEffect(() => {
@@ -224,7 +226,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
   }, [connectionState, callState])
 
   const resetCallState = () => {
-    // Only the caller writes the log to the database to prevent duplicate entries
     if (callerId === currentUserId && targetRecipientIdRef.current) {
       const duration = callStartTimeRef.current
         ? Math.round((Date.now() - callStartTimeRef.current) / 1000)
@@ -251,7 +252,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
     setCallerName('')
     setIncomingOffer(null)
     targetRecipientIdRef.current = null
-    setIsPiP(false) // Reset PiP state on call teardowns
+    setIsPiP(false)
     stopRingtone()
     releaseStream()
     closeWebRTCPeerConnection()
@@ -277,15 +278,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
     setCallerId(currentUserId)
     setCallerName(currentUsername)
 
-    // Acquire stream with chosen devices
     const localMediaStream = stream || await acquireStream(videoId, audioId)
 
-    // Setup temporary peer connection
     const tempPC = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
     })
     
-    // Add local tracks so SDP contains media profiles
     localMediaStream.getTracks().forEach((track) => {
       tempPC.addTrack(track, localMediaStream)
     })
@@ -296,26 +294,19 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
 
       console.log('Generated initial offer, broadcasting call invite...')
       
-      // Ring locally as caller (ringback tone)
       startRingtone()
 
-      // Broadcast incoming call event to recipient
-      globalCallChannelRef.current?.send({
-        type: 'broadcast',
-        event: 'incoming_call',
-        payload: {
-          callId: newCallId,
-          callerId: currentUserId,
-          callerName: currentUsername,
-          offer,
-          type: callType,
-        },
+      callsSocket.emit('incoming_call', {
+        roomId: `user-calls:${targetRecipientIdRef.current}`,
+        callId: newCallId,
+        callerId: currentUserId,
+        callerName: currentUsername,
+        offer,
+        type: callType
       })
 
-      // Unsubscribe temp connection and store stream for negotiations
       tempPC.close()
 
-      // Set up the useWebRTC handlers for caller
       await startWebRTCNegotiation(newCallId, localMediaStream)
     } catch (err: any) {
       console.error("[WebRTC Offer Creation Failure]", {
@@ -345,23 +336,17 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
     if (!callId || !incomingOffer) return
 
     try {
-      // Acquire callee stream with selected hardware devices
       const localMediaStream = stream || await acquireStream(videoId, audioId)
 
       setCallState('active')
       callStartTimeRef.current = Date.now()
 
-      // Broadcast call accept to notify caller
-      globalCallChannelRef.current?.send({
-        type: 'broadcast',
-        event: 'call_accepted',
-        payload: {
-          callId,
-          calleeId: currentUserId,
-        },
+      callsSocket.emit('call_accepted', {
+        roomId: `user-calls:${callerId}`,
+        callId,
+        calleeId: currentUserId
       })
 
-      // Setup useWebRTC negotiation for callee
       await acceptWebRTCNegotiation(callId, localMediaStream, incomingOffer)
     } catch (err: any) {
       console.error("[WebRTC Callee Acceptance Failure]", {
@@ -383,12 +368,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
   const declineIncomingCall = () => {
     if (callState !== 'ringing' || !callId || !callerId) return
 
-    globalCallChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'call_declined',
-      payload: {
-        callId,
-      },
+    callsSocket.emit('call_declined', {
+      roomId: `user-calls:${callerId}`,
+      callId
     })
 
     resetCallState()
@@ -400,12 +382,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
 
     const peerId = callerId === currentUserId ? targetRecipientIdRef.current : callerId
     if (peerId) {
-      globalCallChannelRef.current?.send({
-        type: 'broadcast',
-        event: 'call_ended',
-        payload: {
-          callId,
-        },
+      callsSocket.emit('call_ended', {
+        roomId: `user-calls:${peerId}`,
+        callId
       })
     }
 
@@ -418,7 +397,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
         callId,
         callState,
         callTypeActual: callType,
-        callType: callState, // Compatibility mapper
+        callType: callState,
         callerId,
         callerName,
         localStream,
@@ -434,7 +413,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode; currentUserId: 
     >
       {children}
 
-      {/* Device Precheck Modal Overlay */}
       <DevicePrecheckModal
         isOpen={isPrecheckOpen}
         onClose={() => {

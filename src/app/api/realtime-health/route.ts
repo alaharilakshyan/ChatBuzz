@@ -2,28 +2,19 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   const start = Date.now()
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const expressUrl = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5001'
 
   try {
-    if (!supabaseUrl) {
-      throw new Error('Supabase URL configuration is missing')
-    }
-
-    // Ping the Supabase Realtime service gateway
-    const healthUrl = `${supabaseUrl}/realtime/v1/health`
-    const res = await fetch(healthUrl, { method: 'GET', cache: 'no-store' })
-
-    // For managed Cloud instances, a 200, 401, or 403 response indicates the gateway is operational and reachable
-    const isOperational = res.status === 200 || res.status === 401 || res.status === 403
-
-    if (!isOperational) {
-      throw new Error(`Realtime gateway returned operational failure code: ${res.status}`)
+    // Ping Express API to verify node and socket.io initialization
+    const res = await fetch(`${expressUrl}/health`, { cache: 'no-store' })
+    if (!res.ok) {
+      throw new Error(`Express gateway returned HTTP ${res.status}`)
     }
 
     return NextResponse.json({
       status: 'healthy',
       service: 'realtime',
-      statusCode: res.status,
+      provider: 'socket.io',
       latencyMs: Date.now() - start,
       timestamp: new Date().toISOString(),
     })

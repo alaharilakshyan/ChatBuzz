@@ -55,6 +55,11 @@ class UserController {
         const { latitude, longitude } = req.body;
         const start = Date.now();
         try {
+            if (latitude === null || longitude === null) {
+                await Location_1.Location.deleteOne({ userId: new mongoose_1.Types.ObjectId(userId) });
+                (0, logger_1.logOperation)('UPDATE_USER_LOCATION', userId, undefined, 'SUCCESS', Date.now() - start);
+                return (0, response_1.success)(res, 'User location cleared successfully.', null);
+            }
             const location = await Location_1.Location.findOneAndUpdate({ userId: new mongoose_1.Types.ObjectId(userId) }, {
                 location: {
                     type: 'Point',

@@ -80,4 +80,62 @@ export class FriendshipController {
       return next(err);
     }
   };
+
+  removeFriend = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const userId = req.user!.id;
+    const { friendId } = req.params;
+    const start = Date.now();
+
+    try {
+      await this.friendshipService.removeFriend(userId, friendId);
+      logOperation('REMOVE_FRIEND', userId, undefined, 'SUCCESS', Date.now() - start);
+      return success(res, 'Friend removed successfully.', null);
+    } catch (err) {
+      logOperation('REMOVE_FRIEND', userId, undefined, 'FAILED', Date.now() - start, err);
+      return next(err);
+    }
+  };
+
+  cancelRequest = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const userId = req.user!.id;
+    const { requestId } = req.params;
+    const start = Date.now();
+
+    try {
+      await this.friendshipService.cancelRequest(requestId, userId);
+      logOperation('CANCEL_FRIEND_REQUEST', userId, undefined, 'SUCCESS', Date.now() - start);
+      return success(res, 'Friend request canceled successfully.', null);
+    } catch (err) {
+      logOperation('CANCEL_FRIEND_REQUEST', userId, undefined, 'FAILED', Date.now() - start, err);
+      return next(err);
+    }
+  };
+
+  getRequests = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const userId = req.user!.id;
+    const start = Date.now();
+
+    try {
+      const requests = await this.friendshipService.getFriendRequests(userId);
+      logOperation('GET_FRIEND_REQUESTS', userId, undefined, 'SUCCESS', Date.now() - start);
+      return success(res, 'Friend requests list retrieved successfully.', requests);
+    } catch (err) {
+      logOperation('GET_FRIEND_REQUESTS', userId, undefined, 'FAILED', Date.now() - start, err);
+      return next(err);
+    }
+  };
+
+  getBlocked = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const userId = req.user!.id;
+    const start = Date.now();
+
+    try {
+      const blocked = await this.friendshipService.getBlockedList(userId);
+      logOperation('GET_BLOCKED_LIST', userId, undefined, 'SUCCESS', Date.now() - start);
+      return success(res, 'Blocked users list retrieved successfully.', blocked);
+    } catch (err) {
+      logOperation('GET_BLOCKED_LIST', userId, undefined, 'FAILED', Date.now() - start, err);
+      return next(err);
+    }
+  };
 }

@@ -3,12 +3,12 @@
 import React, { useState, useEffect, useTransition, useRef } from 'react'
 import L from 'leaflet'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import { createClient } from '@/utils/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Loader2, Navigation, MapPin, EyeOff } from 'lucide-react'
 import { useLocationSync } from '@/hooks/useLocationSync'
+import { fetchExpress } from '@/lib/api/client'
 import 'leaflet/dist/leaflet.css'
 
 // Fix Leaflet's default marker asset loading path issues
@@ -49,7 +49,6 @@ function RecenterMap({ center, trigger }: { center: [number, number]; trigger: n
 }
 
 export const MapComponent: React.FC<MapComponentProps> = ({ initialFriends, currentUser }) => {
-  const supabase = createClient()
   const { toast } = useToast()
 
   const [ghostMode, setGhostMode] = useState(false)
@@ -58,17 +57,18 @@ export const MapComponent: React.FC<MapComponentProps> = ({ initialFriends, curr
   // 1. Fetch user ghost mode preference from DB
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data } = await supabase
-        .from('user_settings')
-        .select('ghost_mode_enabled')
-        .eq('user_id', currentUser.id)
-        .maybeSingle()
-      if (data) {
-        setGhostMode(data.ghost_mode_enabled)
+      try {
+        const res = await fetchExpress('/users/me')
+        const profile = res.data || res
+        if (profile) {
+          setGhostMode(!!profile.ghostModeEnabled)
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings:', err)
       }
     }
     fetchSettings()
-  }, [supabase, currentUser.id])
+  }, [currentUser.id])
 
   // Call the custom hook to track coordinates and broadcast presence
   const { userLocation, onlineUserLocs, isTracking } = useLocationSync(

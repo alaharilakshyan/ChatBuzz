@@ -2,7 +2,6 @@
 
 import React, { useState, useActionState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
 import { updateProfileAction } from '@/actions/profile'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -29,8 +28,6 @@ interface ProfileFormProps {
 export const ProfileForm: React.FC<ProfileFormProps> = ({ initialProfile }) => {
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
-
   const [username, setUsername] = useState(initialProfile.username)
   const [bio, setBio] = useState(initialProfile.bio || '')
   const [avatarUrl, setAvatarUrl] = useState(initialProfile.avatar_url || '')

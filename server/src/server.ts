@@ -28,7 +28,10 @@ import path from 'path';
 app.use(helmet({
   crossOriginResourcePolicy: false // Allows loading local media files across origins
 }));
-app.use(cors({ origin: '*' }));
+app.use(cors({
+  origin: env.CLIENT_URL,
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/api', limiter);
@@ -51,13 +54,15 @@ app.get('/health', (req, res) => {
 app.use(errorHandler as any);
 
 // Setup Sockets
-setupSockets(httpServer);
+const io = setupSockets(httpServer);
+app.set('io', io);
 
 // Start server listening
 const port = env.PORT;
 connectDatabase().then(() => {
   httpServer.listen(port, () => {
     logger.info(`🚀 Server running in ${env.NODE_ENV} mode on port ${port}`);
+    logger.info(`☁️ Cloudinary initialized with cloud: ${env.CLOUDINARY_CLOUD_NAME}`);
   });
 }).catch((err) => {
   logger.error('❌ Server startup failure due to database connection error:', err);

@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
+import { fetchServer } from '@/lib/api/server'
 
 export async function createCallLogAction(
   receiverId: string,
@@ -8,27 +8,29 @@ export async function createCallLogAction(
   status: 'answered' | 'missed' | 'declined' | 'completed',
   duration?: number
 ) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return { error: 'Unauthorized' }
+  try {
+    const data = await fetchServer('/calls/log', {
+      method: 'POST',
+      body: JSON.stringify({
+        receiverId,
+        callType,
+        status,
+        duration: duration || null
+      })
+    });
+    return { success: true, data }
+  } catch (err: any) {
+    console.error('❌ Error logging call activity:', err)
+    return { error: err.message || 'Call logging failed.' }
   }
+}
 
-  const { data, error } = await supabase
-    .from('call_logs')
-    .insert({
-      caller_id: user.id,
-      receiver_id: receiverId,
-      call_type: callType,
-      status,
-      duration: duration || null,
-    })
-    .select()
-
-  if (error) {
-    console.error('❌ Error logging call activity:', error)
-    return { error: error.message }
+export async function getCallLogsAction() {
+  try {
+    const data = await fetchServer('/calls/log', { method: 'GET' });
+    return { success: true, data }
+  } catch (err: any) {
+    console.error('❌ Error fetching call logs:', err)
+    return { error: err.message || 'Failed to fetch call logs.' }
   }
-
-  return { success: true, data }
 }

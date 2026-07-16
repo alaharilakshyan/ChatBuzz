@@ -6,7 +6,7 @@ import { Plus, X, ChevronLeft, ChevronRight, Loader2, Image, Video, Film, Eye } 
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useToast } from '@/hooks/use-toast'
-import { createClient } from '@/utils/supabase/client'
+import { storageService } from '@/lib/api/services'
 import { createStoryAction } from '@/actions/echoes'
 import { useRouter } from 'next/navigation'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -38,7 +38,6 @@ interface EchoesBarProps {
 }
 
 export const EchoesBar: React.FC<EchoesBarProps> = ({ activeEchoes, currentUser }) => {
-  const supabase = createClient()
   const { toast } = useToast()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -195,22 +194,8 @@ export const EchoesBar: React.FC<EchoesBarProps> = ({ activeEchoes, currentUser 
       const isVideo = uploadFile.type.startsWith('video')
       const mediaType = isVideo ? 'video' : 'image'
 
-      // Character sanitization and flat filename checks
-      const cleanBase = uploadFile.name.replace(/[^a-zA-Z0-9]/g, '_')
-      const fileName = `${currentUser.id}-${Date.now()}-${cleanBase}.${fileExt}`
-
-      const { data, error: uploadErr } = await supabase.storage
-        .from('stories_media')
-        .upload(fileName, uploadFile, {
-          cacheControl: '3600',
-          upsert: true,
-        })
-
-      if (uploadErr) throw uploadErr
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('stories_media')
-        .getPublicUrl(fileName)
+      const result = await storageService.uploadMedia(uploadFile, 'stories')
+      const publicUrl = result.url
 
       const actionRes = await createStoryAction(
         publicUrl,

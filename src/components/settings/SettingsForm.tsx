@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useTransition, useEffect, useRef } from 'react'
-import { createClient as createBrowserClient } from '@/utils/supabase/client'
+import { storageService } from '@/lib/api/services'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from 'next-themes'
@@ -93,7 +93,6 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
   const [settings, setSettings] = useState<UserSettings>(initialSettings)
   const [isPending, startTransition] = useTransition()
 
-  const supabase = createBrowserClient()
   const bgInputRef = useRef<HTMLInputElement>(null)
   const [uploadingBg, setUploadingBg] = useState(false)
 
@@ -103,36 +102,8 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
 
     setUploadingBg(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Unauthorized')
-
-      const fileExt = file.name.split('.').pop()
-      // Clean and sanitize base filename to prevent path validation issues
-      const cleanBaseName = file.name.replace(/[^a-zA-Z0-9]/g, '_')
-      const fileName = `${user.id}-${Date.now()}-${cleanBaseName}.${fileExt}`
-      const filePath = fileName // Keep it clean at the root of the bucket
-
-      const { data, error: uploadErr } = await supabase.storage
-        .from('backgrounds')
-        .upload(filePath, file, { cacheControl: '3600', upsert: true })
-
-      if (uploadErr) {
-        console.error("[Storage Upload Failure]", {
-          bucketName: 'backgrounds',
-          userId: user.id,
-          fileName,
-          errorMsg: uploadErr.message || String(uploadErr),
-          timestamp: new Date().toISOString()
-        })
-        console.error("[Storage Upload Failure] Raw Error Object:", uploadErr)
-        throw uploadErr
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('backgrounds')
-        .getPublicUrl(filePath)
-
-      await handleToggle('chat_background_url' as any, publicUrl)
+      const result = await storageService.uploadMedia(file, 'backgrounds')
+      await handleToggle('chat_background_url' as any, result.url)
 
       toast({
         title: 'Background Uploaded',
@@ -227,7 +198,7 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
     // 4. Trigger Server Action inside Transition
     startTransition(async () => {
       const payload: UserSettingsPayload = { [key]: newValue }
-      const res = await updatePreferencesAction(payload)
+      const res = await updatePreferencesAction(payload) as any
 
       if (res?.error) {
         // Rollback on error
@@ -492,14 +463,14 @@ export const SettingsForm: React.FC<SettingsFormProps> = ({ initialSettings, use
                           </span>
                         </p>
                         <p className="text-xs text-slate-400 dark:text-slate-500">
-                          Secure browser session linked using @supabase/ssr token management.
+                          Secure browser session verified using HttpOnly JWT token cookies.
                         </p>
                       </div>
                     </Card>
 
                     <div className="flex items-center gap-3 text-slate-400 dark:text-slate-500 px-2">
                       <CheckCircle className="w-4 h-4 text-emerald-500" />
-                      <span className="text-xs font-semibold">Row-Level Security (RLS) is fully active on your account storage.</span>
+                      <span className="text-xs font-semibold">Secure data constraints are fully active on your account storage.</span>
                     </div>
                   </div>
                 </div>

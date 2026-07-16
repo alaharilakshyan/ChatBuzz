@@ -1,7 +1,9 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { createClient } from '@/utils/supabase/client'
+import { storageService } from '@/lib/api/services'
+import { fetchExpress } from '@/lib/api/client'
+import { chatSocket, presenceSocket } from '@/lib/socket/client'
 import { MessageBubble, Message } from './MessageBubble'
 import { ChatInput } from './ChatInput'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -38,22 +40,22 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   
   const scrollRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
-  const supabase = createClient()
 
   // Fetch custom background settings on mount
   useEffect(() => {
     const fetchBackground = async () => {
-      const { data } = await supabase
-        .from('user_settings')
-        .select('chat_background_url')
-        .eq('user_id', currentUser.id)
-        .maybeSingle()
-      if (data?.chat_background_url) {
-        setBackgroundUrl(data.chat_background_url)
+      try {
+        const res = await fetchExpress('/users/me')
+        const profile = res.data || res
+        if (profile?.chatBackgroundUrl) {
+          setBackgroundUrl(profile.chatBackgroundUrl)
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings:', err)
       }
     }
     fetchBackground()
-  }, [supabase, currentUser.id])
+  }, [currentUser.id])
 
   // Reset messages state when active room changes
   useEffect(() => {
@@ -88,122 +90,78 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   }, [messages, currentUser.id])
 
-  // Setup Postgres message subscription & Presence typing indicators
+  // Setup Postgres/Socket.IO message subscription & Presence typing indicators
   useEffect(() => {
-    const messagesChannelName = `messages:${activeId}`
-    const presenceChannelName = `presence:${activeId}`
+    const chat = chatSocket
+    const presence = presenceSocket
 
-    // 1. Subscribe to Postgres Write inserts
-    const messagesChannel = supabase
-      .channel(messagesChannelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
+    if (!chat.connected) chat.connect()
+    if (!presence.connected) presence.connect()
+
+    const roomId = isChannel ? `channel:${activeId}` : `dm:${activeId}`
+    chat.emit('join_room', { roomId })
+
+    presence.emit('track_user', {
+      userId: currentUser.id,
+      username: currentUser.username,
+      avatarUrl: currentUser.avatar_url,
+      isTyping: false
+    })
+
+    const handleNewMessage = (msg: any) => {
+      // Format to matches UI signature
+      const formattedMsg: Message = {
+        id: msg._id || msg.id,
+        sender_id: msg.senderId?._id || msg.senderId || msg.sender_id,
+        receiver_id: msg.recipientId || msg.receiver_id,
+        channel_id: msg.channelId || msg.channel_id,
+        content: msg.content,
+        created_at: msg.createdAt || msg.created_at,
+        is_ephemeral: msg.isEphemeral,
+        is_one_time_view: msg.isOneTimeView,
+        sender: {
+          username: msg.senderId?.username || msg.sender?.username || 'User',
+          avatar_url: msg.senderId?.avatarUrl || msg.sender?.avatar_url || null
         },
-        async (payload) => {
-          const newMsg = payload.new as any
+        attachments: msg.attachments || []
+      }
 
-          // Client-side filtering check to avoid conversation bleed
-          const isMatch = isChannel
-            ? newMsg.channel_id === activeId
-            : (newMsg.sender_id === activeId && newMsg.receiver_id === currentUser.id) ||
-              (newMsg.sender_id === currentUser.id && newMsg.receiver_id === activeId)
-
-          if (!isMatch) return
-
-          // Fetch sender username & avatar details
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('username, avatar_url')
-            .eq('id', newMsg.sender_id)
-            .is('deleted_at', null)
-            .single()
-
-          // Fetch message attachments
-          const { data: dbAttachments } = await supabase
-            .from('attachments')
-            .select('name, mime_type, size, storage_path')
-            .eq('message_id', newMsg.id)
-            .is('deleted_at', null)
-
-          const formattedMsg: Message = {
-            id: newMsg.id,
-            sender_id: newMsg.sender_id,
-            receiver_id: newMsg.receiver_id,
-            channel_id: newMsg.channel_id,
-            content: newMsg.content,
-            created_at: newMsg.created_at,
-            is_ephemeral: newMsg.is_ephemeral,
-            is_one_time_view: newMsg.is_one_time_view,
-            sender: profile
-              ? {
-                  username: profile.username,
-                  avatar_url: profile.avatar_url,
-                }
-              : { username: 'Unknown User', avatar_url: null },
-            attachments: (dbAttachments as any) || [],
-          }
-
-          setMessages((prev) => {
-            // Avoid duplicates
-            if (prev.some((m) => m.id === formattedMsg.id)) return prev
-            return [...prev, formattedMsg]
-          })
-        }
-      )
-      .subscribe()
-
-    // 2. Setup Presence typing indicator and online list
-    const presenceChannel = supabase.channel(presenceChannelName)
-
-    presenceChannel
-      .on('presence', { event: 'sync' }, () => {
-        const presenceState = presenceChannel.presenceState()
-        const typers: string[] = []
-        const viewersMap: Record<string, { id: string; username: string; avatarUrl: string | null; isTyping: boolean }> = {}
-
-        Object.keys(presenceState).forEach((key) => {
-          const users = presenceState[key] as any[]
-          users.forEach((u) => {
-            // Typing tracker
-            if (u.is_typing && u.user_id !== currentUser.id) {
-              typers.push(u.username)
-            }
-            // Viewing tracker: exclude self
-            if (u.user_id !== currentUser.id) {
-              viewersMap[u.user_id] = {
-                id: u.user_id,
-                username: u.username,
-                avatarUrl: u.avatar_url || null,
-                isTyping: !!u.is_typing
-              }
-            }
-          })
-        })
-
-        setTypingUsers([...new Set(typers)])
-        setViewingUsers(Object.values(viewersMap))
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === formattedMsg.id)) return prev
+        return [...prev, formattedMsg]
       })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({
-            user_id: currentUser.id,
-            username: currentUser.username,
-            avatar_url: currentUser.avatar_url,
-            is_typing: false,
-          })
-        }
-      })
-
-    // Unmount cleanup to prevent memory leaks
-    return () => {
-      supabase.removeChannel(messagesChannel)
-      supabase.removeChannel(presenceChannel)
     }
-  }, [activeId, isChannel, currentUser, supabase])
+    chat.on('message_received', handleNewMessage)
+
+    const handlePresenceSync = (usersList: any[]) => {
+      const typers: string[] = []
+      const viewersMap: Record<string, { id: string; username: string; avatarUrl: string | null; isTyping: boolean }> = {}
+
+      usersList.forEach((u) => {
+        if (u.userId !== currentUser.id) {
+          if (u.isTyping) {
+            typers.push(u.username)
+          }
+          viewersMap[u.userId] = {
+            id: u.userId,
+            username: u.username,
+            avatarUrl: u.avatarUrl || null,
+            isTyping: !!u.isTyping
+          }
+        }
+      })
+
+      setTypingUsers([...new Set(typers)])
+      setViewingUsers(Object.values(viewersMap))
+    }
+    presence.on('presence_sync', handlePresenceSync)
+
+    return () => {
+      chat.emit('leave_room', { roomId })
+      chat.off('message_received', handleNewMessage)
+      presence.off('presence_sync', handlePresenceSync)
+    }
+  }, [activeId, isChannel, currentUser])
 
   // Call Server Action to mutate DB securely
   const handleSendMessage = async (
@@ -219,24 +177,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       setIsUploading(true)
       try {
         const file = options.file
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${activeId}/${crypto.randomUUID()}.${fileExt}`
-
-        const { data, error } = await supabase.storage
-          .from('attachments')
-          .upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: true,
-          })
-
-        if (error) throw error
+        const result = await storageService.uploadMedia(file, 'attachments')
 
         attachmentPayload = {
           name: file.name,
           mime_type: file.type,
           size: file.size,
-          storage_path: fileName,
-          checksum: 'chk-' + crypto.randomUUID().substring(0, 8),
+          storage_path: result.url,
+          checksum: result.checksum || 'chk-' + crypto.randomUUID().substring(0, 8),
         }
       } catch (err: any) {
         toast({
@@ -272,13 +220,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   // Update Presence typing details
   const handleTyping = async (isTyping: boolean) => {
-    const presenceChan = supabase.channel(`presence:${activeId}`)
-    await presenceChan.track({
-      user_id: currentUser.id,
-      username: currentUser.username,
-      avatar_url: currentUser.avatar_url,
-      is_typing: isTyping,
-    })
+    const presence = presenceSocket
+    if (presence.connected) {
+      presence.emit(isTyping ? 'typing:start' : 'typing:stop', isChannel ? { channelId: activeId } : { recipientId: activeId })
+    }
   }
 
   return (

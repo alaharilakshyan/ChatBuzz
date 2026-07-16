@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useTransition } from 'react'
-import { createClient } from '@/utils/supabase/client'
+import { presenceSocket } from '@/lib/socket/client'
 import { updateLocationAction, clearLocationAction } from '@/actions/location'
 import { useToast } from '@/hooks/use-toast'
 
@@ -19,7 +19,6 @@ export function useLocationSync(
   avatarUrl: string | null,
   ghostModeEnabled: boolean
 ) {
-  const supabase = createClient()
   const { toast } = useToast()
   
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
@@ -87,60 +86,50 @@ export function useLocationSync(
 
   // 2. Manage Realtime Presence coordination
   useEffect(() => {
-    const channel = supabase.channel('online-users', {
-      config: {
-        presence: {
-          key: userId,
-        },
-      },
-    })
+    const presence = presenceSocket
+    if (!presence.connected) presence.connect()
 
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState()
-        const locations: Record<string, FriendPresenceLocation> = {}
-
-        Object.keys(state).forEach((key) => {
-          const entry = state[key]?.[0] as any
-          if (
-            entry &&
-            entry.latitude &&
-            entry.longitude &&
-            key !== userId
-          ) {
-            locations[key] = {
-              lat: entry.latitude,
-              lng: entry.longitude,
-              username: entry.username,
-              avatar_url: entry.avatar_url,
-              online_at: entry.online_at || new Date().toISOString(),
-            }
-          }
-        })
-        setOnlineUserLocs(locations)
+    // Track location details
+    if (!ghostModeEnabled && userLocation) {
+      presence.emit('track_user', {
+        userId,
+        username,
+        avatarUrl,
+        latitude: userLocation[0],
+        longitude: userLocation[1],
+        online_at: new Date().toISOString()
       })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          if (!ghostModeEnabled && userLocation) {
-            await channel.track({
-              user_id: userId,
-              username: username,
-              avatar_url: avatarUrl,
-              latitude: userLocation[0],
-              longitude: userLocation[1],
-              online_at: new Date().toISOString(),
-            })
-          } else {
-            // Untrack/Clear presence if ghost mode is active or coordinates are unavailable
-            await channel.track({})
+    } else {
+      presence.emit('track_user', {
+        userId,
+        username,
+        avatarUrl,
+        online_at: new Date().toISOString()
+      })
+    }
+
+    const handlePresenceSync = (usersList: any[]) => {
+      const locations: Record<string, FriendPresenceLocation> = {}
+      usersList.forEach((u) => {
+        if (u.userId !== userId && u.latitude && u.longitude) {
+          locations[u.userId] = {
+            lat: u.latitude,
+            lng: u.longitude,
+            username: u.username,
+            avatar_url: u.avatarUrl || null,
+            online_at: u.online_at || new Date().toISOString()
           }
         }
       })
+      setOnlineUserLocs(locations)
+    }
+
+    presence.on('presence_sync', handlePresenceSync)
 
     return () => {
-      channel.unsubscribe()
+      presence.off('presence_sync', handlePresenceSync)
     }
-  }, [supabase, userId, username, avatarUrl, userLocation, ghostModeEnabled])
+  }, [userId, username, avatarUrl, userLocation, ghostModeEnabled])
 
   return {
     userLocation,

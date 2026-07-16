@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1, // Keep workers at 1 to prevent Supabase database race conditions
+  workers: 1, // Keep workers at 1 to prevent database race conditions
   reporter: 'line',
   use: {
     baseURL: 'http://localhost:3000',

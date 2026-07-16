@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Flame, Lock, User, FileText, Download } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { createClient } from '@/utils/supabase/client'
+
 
 export interface Attachment {
   name: string
@@ -42,7 +42,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   isSent,
   senderProfile,
 }) => {
-  const supabase = createClient()
   const username = senderProfile?.username || message.sender?.username || 'Unknown User'
   const avatarUrl = senderProfile?.avatar_url || message.sender?.avatar_url || null
 
@@ -57,12 +56,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   useEffect(() => {
     if (attachment) {
-      const { data } = supabase.storage.from('attachments').getPublicUrl(attachment.storage_path)
-      if (data?.publicUrl) {
-        setFileUrl(data.publicUrl)
-      }
+      setFileUrl(attachment.storage_path)
     }
-  }, [attachment, supabase])
+  }, [attachment])
 
   const isImage = attachment?.mime_type.startsWith('image/')
 

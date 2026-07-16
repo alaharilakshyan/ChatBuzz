@@ -40,8 +40,9 @@ class UserService {
             userTag
         });
         const token = this.generateToken(user);
+        const refreshToken = this.generateRefreshToken(user);
         logger_1.logger.info(`User registered successfully: ${email}`);
-        return { user, token };
+        return { user, token, refreshToken };
     }
     async loginLocal(email, password) {
         const user = await this.userRepository.findByEmail(email);
@@ -53,11 +54,15 @@ class UserService {
             throw new error_1.AuthenticationError('Invalid email or password.');
         }
         const token = this.generateToken(user);
+        const refreshToken = this.generateRefreshToken(user);
         logger_1.logger.info(`User logged in successfully: ${email}`);
-        return { user, token };
+        return { user, token, refreshToken };
     }
     generateToken(user) {
         return jsonwebtoken_1.default.sign({ id: user._id.toString(), email: user.email }, env_1.env.JWT_SECRET, { expiresIn: env_1.env.JWT_EXPIRES_IN });
+    }
+    generateRefreshToken(user) {
+        return jsonwebtoken_1.default.sign({ id: user._id.toString(), email: user.email }, env_1.env.REFRESH_TOKEN_SECRET, { expiresIn: env_1.env.REFRESH_TOKEN_EXPIRES_IN });
     }
 }
 exports.UserService = UserService;

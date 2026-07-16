@@ -26,9 +26,10 @@ export const RegisterForm = () => {
     } else if (state?.success) {
       toast({
         title: 'Registration Successful!',
-        description: 'Account created. Please log in with your credentials.',
+        description: 'Welcome to ChatBuzz! Your account has been created.',
       })
-      router.push('/login')
+      router.push('/chat')
+      router.refresh()
     }
   }, [state, router, toast])
 

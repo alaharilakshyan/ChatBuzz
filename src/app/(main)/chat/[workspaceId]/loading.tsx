@@ -1,7 +1,7 @@
 import React from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 
-export default function ChatLoading() {
+export default function WorkspaceLoading() {
   return (
     <div className="flex-1 flex h-full w-full bg-white dark:bg-slate-950 transition-colors duration-300">
       {/* Sidebar Channels Skeleton */}
@@ -17,9 +17,8 @@ export default function ChatLoading() {
         </div>
       </div>
       
-      {/* Message Area Skeleton */}
+      {/* Workspace Dashboard Skeleton */}
       <div className="flex-1 flex flex-col p-6 justify-between h-full">
-        {/* Messages Stream */}
         <div className="flex flex-col gap-6 flex-1 justify-end">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className={`flex gap-3 items-end ${i % 2 === 0 ? '' : 'flex-row-reverse'}`}>
@@ -32,7 +31,6 @@ export default function ChatLoading() {
           ))}
         </div>
 
-        {/* Input panel skeleton */}
         <Skeleton className="h-12 w-full rounded-xl mt-6" />
       </div>
     </div>

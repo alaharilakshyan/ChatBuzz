@@ -5,15 +5,16 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { PhoneCall, Video, Phone, ArrowUpRight, ArrowDownLeft, Clock, Search, Loader2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { createClient } from '@/utils/supabase/client'
 import { useCall } from '@/components/call/CallContext'
+import { getCallLogsAction } from '@/actions/calls'
+import { fetchExpress } from '@/lib/api/client'
 
 interface CallLog {
   id: string
   caller_id: string
   receiver_id: string
   call_type: 'audio' | 'video'
-  status: 'answered' | 'missed' | 'declined' | 'completed'
+  status: 'answered' | 'missed' | 'declined' | 'completed' | 'connected' | 'rejected'
   duration: number | null
   created_at: string
   peer: {
@@ -32,7 +33,6 @@ interface Friend {
 }
 
 export default function CallsPage() {
-  const supabase = createClient()
   const { initiateCall } = useCall()
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -43,7 +43,7 @@ export default function CallsPage() {
 
   // Format call duration cleanly (e.g. 2m 14s)
   const formatDuration = (seconds: number | null) => {
-    if (!seconds) return 'Missed'
+    if (!seconds || seconds <= 0) return 'Missed'
     const m = Math.floor(seconds / 60)
     const s = seconds % 60
     return m > 0 ? `${m}m ${s}s` : `${s}s`
@@ -64,60 +64,52 @@ export default function CallsPage() {
     const fetchData = async () => {
       setLoading(true)
       try {
-        // 1. Fetch current user
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+        // 1. Fetch current user profile
+        const profileRes = await fetchExpress('/users/me')
+        const profile = profileRes.data || profileRes
+        const user = {
+          id: profile.userId?._id || profile.userId?.id || profile.userId,
+          email: profile.userId?.email || ''
+        }
         setCurrentUserId(user.id)
 
-        // 2. Fetch friendships and friend profiles
-        const { data: friendships } = await supabase
-          .from('friendships')
-          .select('user1_id, user2_id')
-          .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-          .is('deleted_at', null)
-
-        const friendIds = friendships?.map((f) => (f.user1_id === user.id ? f.user2_id : f.user1_id)) || []
-        let friendList: Friend[] = []
-
-        if (friendIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, username, avatar_url, user_tag')
-            .in('id', friendIds)
-            .is('deleted_at', null)
-          if (profiles) friendList = profiles
-        }
+        // 2. Fetch friends list
+        const friendsRes = await fetchExpress('/friends')
+        const friendsData = friendsRes.data || friendsRes
+        const friendList: Friend[] = (friendsData || []).map((f: any) => ({
+          id: f.userId?._id || f.userId?.id || f.userId,
+          username: f.username,
+          avatar_url: f.avatarUrl || null,
+          user_tag: f.userTag
+        }))
         setFriends(friendList)
 
         // 3. Fetch call logs
-        const { data: dbLogs } = await supabase
-          .from('call_logs')
-          .select('*')
-          .or(`caller_id.eq.${user.id},receiver_id.eq.${user.id}`)
-          .order('created_at', { ascending: false })
-
-        if (dbLogs && dbLogs.length > 0) {
-          // Fetch profiles of participants in logs to map peer details
+        const logsRes = await getCallLogsAction()
+        if (logsRes.success && logsRes.data) {
+          const dbLogs = logsRes.data.data || logsRes.data
           const uniqueUserIdsInLogs = Array.from(
-            new Set(dbLogs.flatMap((log) => [log.caller_id, log.receiver_id]))
+            new Set((dbLogs || []).flatMap((log: any) => [log.callerId, log.receiverId]))
           ).filter((id) => id !== user.id)
 
           const profilesMap: Record<string, Friend> = {}
-          if (uniqueUserIdsInLogs.length > 0) {
-            const { data: logProfiles } = await supabase
-              .from('profiles')
-              .select('id, username, avatar_url, user_tag')
-              .in('id', uniqueUserIdsInLogs)
-            
-            if (logProfiles) {
-              logProfiles.forEach((p) => {
-                profilesMap[p.id] = p
-              })
+          for (const uid of uniqueUserIdsInLogs) {
+            try {
+              const uRes = await fetchExpress(`/users/${uid}`)
+              const uData = uRes.data || uRes
+              profilesMap[uid as string] = {
+                id: uid as string,
+                username: uData.username || 'Unknown User',
+                avatar_url: uData.avatarUrl || null,
+                user_tag: uData.userTag || '0000'
+              }
+            } catch (err) {
+              console.error('Failed to fetch details for log participant:', uid, err)
             }
           }
 
-          const mappedLogs: CallLog[] = dbLogs.map((log) => {
-            const peerId = log.caller_id === user.id ? log.receiver_id : log.caller_id
+          const mappedLogs: CallLog[] = (dbLogs || []).map((log: any) => {
+            const peerId = log.callerId === user.id ? log.receiverId : log.callerId
             const peer = profilesMap[peerId] || {
               id: peerId,
               username: 'Unknown User',
@@ -125,8 +117,18 @@ export default function CallsPage() {
               user_tag: '0000',
             }
 
+            const dur = log.startTime && log.endTime 
+              ? Math.round((new Date(log.endTime).getTime() - new Date(log.startTime).getTime()) / 1000) 
+              : 0
+
             return {
-              ...log,
+              id: log._id || log.id,
+              caller_id: log.callerId,
+              receiver_id: log.receiverId,
+              call_type: log.callType || 'audio',
+              status: log.status,
+              duration: dur,
+              created_at: log.startTime || log.createdAt,
               peer,
             }
           })
@@ -140,7 +142,7 @@ export default function CallsPage() {
     }
 
     fetchData()
-  }, [supabase])
+  }, [])
 
   const filteredFriends = friends.filter((f) =>
     f.username.toLowerCase().includes(searchQuery.toLowerCase())
@@ -197,7 +199,7 @@ export default function CallsPage() {
             ) : (
               callLogs.map((log) => {
                 const isIncoming = log.receiver_id === currentUserId
-                const isMissed = log.status === 'missed' || log.status === 'declined'
+                const isMissed = log.status === 'missed' || log.status === 'rejected'
 
                 return (
                   <div
@@ -220,9 +222,9 @@ export default function CallsPage() {
                         <div className="flex items-center gap-1.5 mt-1 text-slate-400 dark:text-slate-500 text-xs">
                           {/* Direction Indicator */}
                           {isIncoming ? (
-                            <ArrowDownLeft className={`w-3.5 h-3.5 ${isMissed ? 'text-destructive' : 'text-emerald-500'}`} />
+                            <ArrowDownLeft className={`w-3.5 h-3.5 ${isMissed ? 'text-rose-500' : 'text-emerald-500'}`} />
                           ) : (
-                            <ArrowUpRight className={`w-3.5 h-3.5 ${isMissed ? 'text-destructive' : 'text-emerald-500'}`} />
+                            <ArrowUpRight className={`w-3.5 h-3.5 ${isMissed ? 'text-rose-500' : 'text-emerald-500'}`} />
                           )}
                           <span className="font-medium text-[11px] leading-none capitalize">
                             {isIncoming ? 'Incoming' : 'Outgoing'} • {log.status}

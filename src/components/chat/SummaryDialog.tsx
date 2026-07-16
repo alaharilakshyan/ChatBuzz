@@ -9,9 +9,9 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { summarizeConversationAction } from '@/actions/ai'
+import { fetchExpress } from '@/lib/api/client'
 import { Loader2, Wand2, RefreshCw } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { createClient } from '@/utils/supabase/client'
 
 interface SummaryDialogProps {
   isOpen: boolean
@@ -34,37 +34,20 @@ export const SummaryDialog: React.FC<SummaryDialogProps> = ({
     setSummary('')
 
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setError('Unauthorized')
-        return
-      }
+      const profileRes = await fetchExpress('/users/me')
+      const profile = profileRes.data || profileRes
+      const currentUserId = profile.userId?._id || profile.userId?.id || profile.userId
 
       // Fetch last 50 direct messages between currentUser and friend
-      const { data: dbMessages, error: dbError } = await supabase
-        .from('messages')
-        .select(`
-          content,
-          sender_id,
-          sender:profiles!messages_sender_id_fkey(username)
-        `)
-        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${user.id})`)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true })
-        .limit(50)
-
-      if (dbError) {
-        throw dbError
-      }
+      const dbMessages = await fetchExpress(`/messages/dm/${friendId}`)
 
       if (!dbMessages || dbMessages.length === 0) {
         setSummary("No messages to summarize yet. Type some messages first!")
         return
       }
 
-      const chatPayload = dbMessages.map((m: any) => ({
-        sender: m.sender?.username || (m.sender_id === user.id ? 'You' : 'Friend'),
+      const chatPayload = dbMessages.slice(-50).map((m: any) => ({
+        sender: m.sender?.username || (m.senderId === currentUserId ? 'You' : 'Friend'),
         content: m.content || '[Attachment]',
       }))
 

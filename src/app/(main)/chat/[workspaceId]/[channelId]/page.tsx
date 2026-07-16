@@ -1,7 +1,7 @@
 import React from 'react'
 import { redirect } from 'next/navigation'
 import { Hash, Lock, Search, Bell, Settings } from 'lucide-react'
-import { createClient } from '@/utils/supabase/server'
+import { fetchServer } from '@/lib/api/server'
 import { ChatArea } from '@/components/chat/ChatArea'
 import { Message } from '@/components/chat/MessageBubble'
 
@@ -13,81 +13,46 @@ interface ChannelPageProps {
 }
 
 export default async function ChannelPage({ params }: ChannelPageProps) {
-  const supabase = createClient()
   const { workspaceId, channelId } = await params
 
-  // Verify auth
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let profile: any = null
+  let channel: any = null
+  let initialMessages: Message[] = []
 
-  if (!user) {
-    redirect('/login')
-  }
+  try {
+    const profileData = await fetchServer('/users/me')
+    profile = {
+      id: profileData.userId._id || profileData.userId.id,
+      username: profileData.username,
+      avatar_url: profileData.avatarUrl || null
+    }
 
-  // Fetch current user details
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, username, avatar_url')
-    .eq('id', user.id)
-    .is('deleted_at', null)
-    .single()
+    channel = await fetchServer(`/channels/${channelId}`)
+    // Map database properties to the UI expectations
+    channel = {
+      id: channel._id || channel.id,
+      name: channel.name,
+      is_private: channel.isPrivate || false
+    }
 
-  if (!profile) {
-    redirect('/login')
-  }
-
-  // Fetch channel details
-  const { data: channel } = await supabase
-    .from('channels')
-    .select('*')
-    .eq('id', channelId)
-    .is('deleted_at', null)
-    .single()
-
-  if (!channel) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-6 text-slate-400">
-        Channel not found.
-      </div>
-    )
-  }
-
-  // Fetch historical channel messages with sender profiles
-  const { data: dbMessages } = await supabase
-    .from('messages')
-    .select(`
-      id,
-      sender_id,
-      receiver_id,
-      channel_id,
-      content,
-      created_at,
-      is_ephemeral,
-      is_one_time_view,
-      sender:profiles!messages_sender_id_fkey(username, avatar_url)
-    `)
-    .eq('channel_id', channelId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true })
-
-  const initialMessages: Message[] =
-    (dbMessages || []).map((m: any) => ({
-      id: m.id,
-      sender_id: m.sender_id,
-      receiver_id: m.receiver_id,
-      channel_id: m.channel_id,
+    const messages = await fetchServer(`/messages/channel/${channelId}`)
+    initialMessages = messages.map((m: any) => ({
+      id: m._id || m.id,
+      sender_id: m.senderId._id || m.senderId.id || m.senderId,
+      channel_id: m.channelId,
       content: m.content,
-      created_at: m.created_at,
-      is_ephemeral: m.is_ephemeral,
-      is_one_time_view: m.is_one_time_view,
+      created_at: m.createdAt || m.created_at,
       sender: m.sender
         ? {
             username: m.sender.username,
             avatar_url: m.sender.avatar_url,
           }
         : undefined,
-    })) || []
+    }))
+  } catch (err) {
+    console.error('ChannelPage fetch error:', err)
+    redirect('/login')
+  }
 
   const currentUser = {
     id: profile.id,

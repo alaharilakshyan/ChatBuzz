@@ -2,7 +2,7 @@
 
 import React, { useState, useActionState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
+import { storageService } from '@/lib/api/services'
 import { updateProfileAction } from '@/actions/profile'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -31,8 +31,6 @@ interface ProfileEditFormProps {
 export const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ initialProfile }) => {
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClient()
-
   const [username, setUsername] = useState(initialProfile.username)
   const [bio, setBio] = useState(initialProfile.bio || '')
   const [avatarUrl, setAvatarUrl] = useState(initialProfile.avatar_url || '')
@@ -83,22 +81,9 @@ export const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ initialProfile
     else setUploadingBanner(true)
 
     try {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${initialProfile.id}/${crypto.randomUUID()}.${fileExt}`
       const bucketName = type === 'avatar' ? 'avatars' : 'banners'
-
-      const { data, error: uploadErr } = await supabase.storage
-        .from(bucketName)
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false,
-        })
-
-      if (uploadErr) throw uploadErr
-
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(fileName)
+      const result = await storageService.uploadMedia(file, bucketName as any)
+      const publicUrl = result.url
 
       if (type === 'avatar') {
         setAvatarUrl(publicUrl)

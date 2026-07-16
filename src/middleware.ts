@@ -7,7 +7,7 @@ export function middleware(request: NextRequest) {
   // Define public paths
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password')
   const isPublicApi = pathname.startsWith('/api/')
-  const isStaticFile = pathname.startsWith('/manifest.json') || pathname.startsWith('/sw.js') || pathname.startsWith('/favicon.ico') || pathname.startsWith('/uploads/')
+  const isStaticFile = pathname.startsWith('/manifest.json') || pathname.startsWith('/sw.js') || pathname.startsWith('/favicon.ico') || pathname.startsWith('/uploads/') || pathname.startsWith('/_vercel/')
 
   if (isPublicApi || isStaticFile) {
     return NextResponse.next()
@@ -30,6 +30,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest\\.json|sw\\.js|.*\\.[\\w]+$).*)',
   ],
 }

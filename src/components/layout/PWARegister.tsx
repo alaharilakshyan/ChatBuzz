@@ -8,7 +8,27 @@ export const PWARegister = () => {
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('PWA ServiceWorker registration disabled in development mode.')
+      console.log('🔄 PWA: Disabling and clearing service workers/caches in development mode...');
+      if (typeof window !== 'undefined') {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (const registration of registrations) {
+              registration.unregister().then((success) => {
+                if (success) {
+                  console.log('✅ Programmatically unregistered service worker:', registration.scope);
+                }
+              });
+            }
+          }).catch((err) => console.warn('Failed to unregister PWA worker:', err));
+        }
+        if ('caches' in window) {
+          caches.keys().then((keys) => {
+            Promise.all(keys.map((key) => caches.delete(key))).then(() => {
+              console.log('✅ Programmatically deleted PWA caches');
+            });
+          }).catch((err) => console.warn('Failed to clear PWA caches:', err));
+        }
+      }
       return
     }
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {

@@ -8,7 +8,7 @@
 
     A state-of-the-art, high-fidelity, real-time communication platform designed using **Google Stitch AI** aesthetics. ChatBuzz features persistent multi-channel workspaces, WebRTC voice/video calls, geospatial mapping, dynamic story reels, and an interactive notifications center.
 
-    ---
+    
 
     ## 🚀 Key Product Features
 
@@ -43,7 +43,7 @@
     *   Curated light/dark-mode theme toggle.
     *   Polished obsidian glassmorphism wrappers, pulsing status indicators, and smooth Framer Motion micro-animations.
 
-    ---
+    
 
     ## 🛠️ Technology Stack
 
@@ -66,11 +66,10 @@
     *   **Security**: Helmet, CORS policies, and Express Rate Limiting
     *   **Logging**: Pino & Pino-Pretty
 
-    ---
+    
 
     ## 📂 Architecture & Directory Structure
 
-    ```
     talk-time-app/
     ├── .github/workflows/          # GitHub Actions CI/CD workflows
     ├── playwright/                 # Playwright test setups and user storage states
@@ -96,13 +95,13 @@
     │   └── proxy.ts                # Next.js Route Interception Proxy (Middleware)
     ├── tsconfig.json               # Next.js compiler rules
     └── package.json                # Frontend scripts and dependencies
-    ```
+    
 
-    ---
+    
 
     ## 🛢️ Database Model Relationships
 
-    ```mermaid
+    mermaid
     erDiagram
         USER ||--|| PROFILE : "has"
         USER ||--o{ FRIENDSHIP : "user1 / user2"
@@ -112,7 +111,7 @@
         USER ||--o{ LOCATION : "reports"
         USER ||--o{ CALL_SESSION : "initiates / receives"
         MESSAGE ||--o{ ATTACHMENT : "contains"
-    ```
+    
 
     *   **User**: Auth credentials, hashed passwords, active refresh tokens.
     *   **Profile**: Display name, user tag (`username#1234`), bio, avatar and banner URLs.
@@ -122,7 +121,7 @@
     *   **Location**: Geospatial GeoJSON point coordinates and last updated time.
     *   **CallSession**: Logger storing caller/receiver IDs, WebRTC channel keys, and duration values.
 
-    ---
+    
 
     ## 🔌 API Endpoints Reference
 
@@ -174,7 +173,7 @@
     3.  **`/calls`**: Standard signaling socket used for WebRTC peer connection negotiations (SDP offers, answers, ICE candidates).
     4.  **`/notifications`**: Direct real-time pipeline to push badge counts and preview popups.
 
-    ---
+
 
     ## ⚙️ Installation & Setup
 
@@ -194,7 +193,7 @@
     VAPID_PUBLIC_KEY=your_vapid_public_key
     VAPID_PRIVATE_KEY=your_vapid_private_key
     VAPID_SUBJECT=mailto:admin@chatbuzz.app
-    ```
+    
 
     #### Frontend (`.env.local`)
     ```env
@@ -232,7 +231,6 @@
         npx playwright test
         ```
 
-    ---
 
     ## 🚢 Deployment Architecture
 

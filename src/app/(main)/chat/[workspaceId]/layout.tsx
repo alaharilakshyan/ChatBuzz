@@ -40,8 +40,12 @@ export default async function WorkspaceLayout({
       icon_url: ws.iconUrl || null,
       owner_id: ws.createdBy._id || ws.createdBy.id || ws.createdBy
     }))
-  } catch (err) {
-    console.error('WorkspaceLayout auth fetch error:', err)
+  } catch (err: any) {
+    if (err.message?.includes('Authentication required') || err.message?.includes('Missing Bearer token')) {
+      console.log('WorkspaceLayout: Session expired, redirecting to /login');
+    } else {
+      console.error('WorkspaceLayout auth fetch error:', err);
+    }
     redirect('/login')
   }
 

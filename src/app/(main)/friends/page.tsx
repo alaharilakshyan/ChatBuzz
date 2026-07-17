@@ -69,8 +69,12 @@ export default async function FriendsPage() {
         avatar_url: story.profiles?.avatar_url || null,
       }
     }))
-  } catch (err) {
-    console.error('FriendsPage fetch error:', err)
+  } catch (err: any) {
+    if (err.message?.includes('Authentication required') || err.message?.includes('Missing Bearer token')) {
+      console.log('FriendsPage: Session expired, redirecting to /login');
+    } else {
+      console.error('FriendsPage fetch error:', err);
+    }
     redirect('/login')
   }
 

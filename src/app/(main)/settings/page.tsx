@@ -10,8 +10,12 @@ export default async function SettingsPage() {
 
   try {
     profile = await fetchServer('/users/me')
-  } catch (err) {
-    console.error('SettingsPage fetch error:', err)
+  } catch (err: any) {
+    if (err.message?.includes('Authentication required') || err.message?.includes('Missing Bearer token')) {
+      console.log('SettingsPage: Session expired, redirecting to /login');
+    } else {
+      console.error('SettingsPage fetch error:', err);
+    }
     redirect('/login')
   }
 

@@ -33,8 +33,12 @@ export default async function MainLayout({ children }: MainLayoutProps) {
       name: ws.name,
       icon_url: ws.iconUrl || null
     }))
-  } catch (err) {
-    console.error('MainLayout auth fetch error:', err)
+  } catch (err: any) {
+    if (err.message?.includes('Authentication required') || err.message?.includes('Missing Bearer token')) {
+      console.log('MainLayout: Session expired, redirecting to /login');
+    } else {
+      console.error('MainLayout auth fetch error:', err);
+    }
     redirect('/login')
   }
 

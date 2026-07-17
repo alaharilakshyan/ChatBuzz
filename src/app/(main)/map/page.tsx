@@ -26,8 +26,12 @@ export default async function MapPage() {
       last_location: f.last_location ? `POINT(${f.last_location.coordinates[0]} ${f.last_location.coordinates[1]})` : null,
       last_location_update: f.last_location_update || null
     }))
-  } catch (err) {
-    console.error('MapPage fetch error:', err)
+  } catch (err: any) {
+    if (err.message?.includes('Authentication required') || err.message?.includes('Missing Bearer token')) {
+      console.log('MapPage: Session expired, redirecting to /login');
+    } else {
+      console.error('MapPage fetch error:', err);
+    }
     redirect('/login')
   }
 

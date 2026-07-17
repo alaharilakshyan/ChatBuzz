@@ -18,8 +18,12 @@ export default async function ProfilePage() {
       bio: profileData.description || null,
       user_tag: profileData.userTag
     }
-  } catch (err) {
-    console.error('ProfilePage fetch error:', err)
+  } catch (err: any) {
+    if (err.message?.includes('Authentication required') || err.message?.includes('Missing Bearer token')) {
+      console.log('ProfilePage: Session expired, redirecting to /login');
+    } else {
+      console.error('ProfilePage fetch error:', err);
+    }
     redirect('/login')
   }
 

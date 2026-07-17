@@ -48,6 +48,7 @@ const AdminController_1 = require("../controllers/AdminController");
 const CallSessionController_1 = require("../controllers/CallSessionController");
 const PushSubscriptionController_1 = require("../controllers/PushSubscriptionController");
 const ChannelController_1 = require("../controllers/ChannelController");
+const NotificationController_1 = require("../controllers/NotificationController");
 const schemas = __importStar(require("../validators/schemas"));
 const router = (0, express_1.Router)();
 const authController = new AuthController_1.AuthController();
@@ -61,6 +62,7 @@ const adminController = new AdminController_1.AdminController();
 const callSessionController = new CallSessionController_1.CallSessionController();
 const pushSubscriptionController = new PushSubscriptionController_1.PushSubscriptionController();
 const channelController = new ChannelController_1.ChannelController();
+const notificationController = new NotificationController_1.NotificationController();
 // Auth routes
 router.post('/auth/register', (0, validation_1.validate)(schemas.registerSchema), authController.register);
 router.post('/auth/login', (0, validation_1.validate)(schemas.loginSchema), authController.login);
@@ -106,6 +108,9 @@ router.post('/calls/log', auth_1.authenticate, callSessionController.logCall);
 router.get('/calls/log', auth_1.authenticate, callSessionController.getLogs);
 // Push subscription routes
 router.post('/push/subscribe', auth_1.authenticate, pushSubscriptionController.subscribe);
+// Notification routes
+router.get('/notifications', auth_1.authenticate, notificationController.getNotifications);
+router.post('/notifications/read-all', auth_1.authenticate, notificationController.readAll);
 // Monitoring routes
 router.get('/health', healthController.check);
 router.get('/ready', healthController.ready);

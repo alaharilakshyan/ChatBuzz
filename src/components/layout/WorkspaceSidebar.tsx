@@ -3,7 +3,7 @@
 import React, { useState, useTransition, useRef, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Home, Plus, Bell, Settings, User, LogOut, Sun, Moon, Users, Phone, Loader2, Navigation } from 'lucide-react'
+import { Home, Plus, Bell, Settings, User, LogOut, Sun, Moon, Users, Phone, Loader2, Navigation, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -23,6 +23,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { createWorkspaceAction } from '@/actions/workspaces'
+import { fetchExpress } from '@/lib/api/client'
 
 export interface Workspace {
   id: string
@@ -58,8 +59,63 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
   const [isCreatingWS, setIsCreatingWS] = useState(false)
-  
+
+  // Notifications states
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  const fetchNotifications = async () => {
+    try {
+      const data = await fetchExpress('/notifications')
+      if (Array.isArray(data)) {
+        setNotifications(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err)
+    }
+  }
+
+  useEffect(() => {
+    fetchNotifications()
+    // Poll notifications every 8 seconds
+    const interval = setInterval(fetchNotifications, 8000)
+    return () => {
+      clearInterval(interval)
+      if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current)
+    }
+  }, [])
+
+  const handleNotificationsEnter = () => {
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current)
+    }
+    setIsNotificationsOpen(true)
+    fetchNotifications() // fetch latest on hover
+  }
+
+  const handleNotificationsLeave = () => {
+    notificationTimeoutRef.current = setTimeout(() => {
+      setIsNotificationsOpen(false)
+    }, 250)
+  }
+
+  const handleReadAllNotifications = async () => {
+    try {
+      await fetchExpress('/notifications/read-all', { method: 'POST' })
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+      toast({
+        title: 'Notifications Cleared',
+        description: 'All notifications have been marked as read.',
+      })
+    } catch (err) {
+      console.error('Failed to mark all as read:', err)
+    }
+  }
+
+  const unreadNotificationsCount = notifications.filter((n) => !n.isRead).length
+
 
   const handleLogout = () => {
     setIsMenuOpen(false)
@@ -231,21 +287,98 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             </Tooltip>
 
             {/* Notifications */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`${btnSizeClass} bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:scale-105 transition-all duration-300 relative flex items-center justify-center`}
-                >
-                  <Bell className="h-5 w-5" strokeWidth={2} />
-                  <span className="absolute top-2 right-2 w-2 h-2 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p className="font-semibold text-xs">Notifications</p>
-              </TooltipContent>
-            </Tooltip>
+            <div 
+              className="relative"
+              onMouseEnter={handleNotificationsEnter}
+              onMouseLeave={handleNotificationsLeave}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`${btnSizeClass} bg-white/40 dark:bg-slate-800/40 border border-white/50 dark:border-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:scale-105 transition-all duration-300 relative flex items-center justify-center`}
+                  >
+                    <Bell className="h-5 w-5" strokeWidth={2} />
+                    {unreadNotificationsCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 bg-emerald-500 border-2 border-slate-50 dark:border-slate-950 text-[9px] font-extrabold text-white rounded-full flex items-center justify-center shadow-lg">
+                        {unreadNotificationsCount}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p className="font-semibold text-xs">Notifications</p>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Notifications Hover/Dropdown Menu */}
+              <AnimatePresence>
+                {isNotificationsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, x: 10, y: -20 }}
+                    animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, x: 10, y: -20 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+                    className="absolute top-0 left-16 w-80 bg-white/95 dark:bg-slate-950/95 backdrop-blur border border-slate-200/60 dark:border-slate-800/80 rounded-2xl shadow-2xl p-4 flex flex-col gap-3 z-50 select-none max-h-96"
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-900/60">
+                      <div>
+                        <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-150">Notifications</h4>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
+                          {unreadNotificationsCount} unread notification{unreadNotificationsCount !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      {unreadNotificationsCount > 0 && (
+                        <button
+                          onClick={handleReadAllNotifications}
+                          className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-350 transition-colors flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1.5 rounded-lg"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>Read All</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-2 max-h-60 pr-1">
+                      {notifications.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-6 text-center">
+                          <div className="w-10 h-10 bg-slate-50 dark:bg-white/5 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 mb-2">
+                            <Bell className="w-5 h-5" />
+                          </div>
+                          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">All caught up!</p>
+                          <p className="text-[10px] text-slate-350 dark:text-slate-650 mt-0.5">No new notifications.</p>
+                        </div>
+                      ) : (
+                        notifications.map((notif) => (
+                          <div
+                            key={notif.id || notif._id}
+                            className={`p-2.5 rounded-xl transition-all border text-left ${
+                              notif.isRead
+                                ? 'bg-slate-50/40 dark:bg-white/[0.01] border-transparent text-slate-500 dark:text-slate-400'
+                                : 'bg-emerald-500/[0.03] dark:bg-emerald-500/[0.02] border-emerald-500/10 dark:border-emerald-500/5 text-slate-800 dark:text-slate-200'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-1.5">
+                              <div className="font-bold text-[11px] leading-tight flex items-center gap-1.5">
+                                {!notif.isRead && <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full flex-shrink-0" />}
+                                <span>{notif.title}</span>
+                              </div>
+                              <span className="text-[9px] text-slate-450 dark:text-slate-500 whitespace-nowrap">
+                                {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 mt-1 leading-snug break-words">
+                              {notif.body}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 

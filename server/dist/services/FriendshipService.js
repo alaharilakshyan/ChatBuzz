@@ -41,6 +41,7 @@ const Friendship_1 = require("../models/Friendship");
 const transaction_1 = require("../utils/transaction");
 const error_1 = require("../middleware/error");
 const mongoose_1 = require("mongoose");
+const Notification_1 = require("../models/Notification");
 class FriendshipService {
     friendshipRepository = new FriendshipRepository_1.FriendshipRepository();
     profileRepository = new ProfileRepository_1.ProfileRepository();
@@ -69,7 +70,22 @@ class FriendshipService {
         if (alreadyFriends) {
             throw new error_1.ConflictError('You are already friends with this user.');
         }
-        return await this.friendshipRepository.createFriendRequest(requesterId, recipientId);
+        const request = await this.friendshipRepository.createFriendRequest(requesterId, recipientId);
+        try {
+            const requesterProfile = await this.profileRepository.findByUserId(requesterId);
+            const requesterName = requesterProfile ? requesterProfile.username : 'Someone';
+            await Notification_1.Notification.create({
+                userId: recipientId,
+                title: 'New Friend Request',
+                body: `${requesterName} sent you a friend request.`,
+                type: 'friend_request',
+                metadata: { requesterId: requesterId.toString(), requestId: (request._id || request.id).toString() }
+            });
+        }
+        catch (err) {
+            console.error('Failed to create friend request notification:', err);
+        }
+        return request;
     }
     async acceptRequest(requestId, userId) {
         const request = await this.friendshipRepository.findFriendRequestById(requestId);

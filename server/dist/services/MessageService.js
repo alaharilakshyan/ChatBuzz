@@ -38,6 +38,8 @@ const MessageRepository_1 = require("../repositories/MessageRepository");
 const ChannelRepository_1 = require("../repositories/ChannelRepository");
 const error_1 = require("../middleware/error");
 const mongoose_1 = require("mongoose");
+const Profile_1 = require("../models/Profile");
+const Notification_1 = require("../models/Notification");
 class MessageService {
     messageRepository = new MessageRepository_1.MessageRepository();
     channelRepository = new ChannelRepository_1.ChannelRepository();
@@ -76,6 +78,21 @@ class MessageService {
                     messageId: message._id
                 });
             }
+        }
+        // Create notification for direct message
+        try {
+            const senderProfile = await Profile_1.Profile.findOne({ userId: senderId });
+            const senderName = senderProfile ? senderProfile.username : 'Someone';
+            await Notification_1.Notification.create({
+                userId: new mongoose_1.Types.ObjectId(recipientId),
+                title: `New message from ${senderName}`,
+                body: content || 'Sent an attachment',
+                type: 'message',
+                metadata: { senderId: senderId.toString(), messageId: message._id.toString() }
+            });
+        }
+        catch (err) {
+            console.error('Failed to create message notification:', err);
         }
         return message;
     }

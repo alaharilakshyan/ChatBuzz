@@ -13,6 +13,7 @@ import { AdminController } from '../controllers/AdminController';
 import { CallSessionController } from '../controllers/CallSessionController';
 import { PushSubscriptionController } from '../controllers/PushSubscriptionController';
 import { ChannelController } from '../controllers/ChannelController';
+import { NotificationController } from '../controllers/NotificationController';
 import * as schemas from '../validators/schemas';
 
 const router = Router();
@@ -28,6 +29,7 @@ const adminController = new AdminController();
 const callSessionController = new CallSessionController();
 const pushSubscriptionController = new PushSubscriptionController();
 const channelController = new ChannelController();
+const notificationController = new NotificationController();
 
 // Auth routes
 router.post('/auth/register', validate(schemas.registerSchema), authController.register);
@@ -81,6 +83,10 @@ router.get('/calls/log', authenticate as any, callSessionController.getLogs);
 
 // Push subscription routes
 router.post('/push/subscribe', authenticate as any, pushSubscriptionController.subscribe);
+
+// Notification routes
+router.get('/notifications', authenticate as any, notificationController.getNotifications);
+router.post('/notifications/read-all', authenticate as any, notificationController.readAll);
 
 // Monitoring routes
 router.get('/health', healthController.check);

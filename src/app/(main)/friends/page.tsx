@@ -15,7 +15,7 @@ export default async function FriendsPage() {
   try {
     const profileData = await fetchServer('/users/me')
     profile = {
-      id: profileData.userId._id || profileData.userId.id,
+      id: profileData.userId._id || profileData.userId.id || profileData.userId,
       username: profileData.username,
       avatar_url: profileData.avatarUrl || null,
       banner_url: profileData.bannerUrl || null,

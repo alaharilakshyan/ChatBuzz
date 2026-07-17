@@ -5,6 +5,7 @@ import { IFriendship, Friendship } from '../models/Friendship';
 import { runInTransaction } from '../utils/transaction';
 import { ConflictError, ForbiddenError, NotFoundError } from '../middleware/error';
 import { Types } from 'mongoose';
+import { Notification } from '../models/Notification';
 
 export class FriendshipService {
   private friendshipRepository = new FriendshipRepository();
@@ -41,7 +42,23 @@ export class FriendshipService {
       throw new ConflictError('You are already friends with this user.');
     }
 
-    return await this.friendshipRepository.createFriendRequest(requesterId, recipientId);
+    const request = await this.friendshipRepository.createFriendRequest(requesterId, recipientId);
+
+    try {
+      const requesterProfile = await this.profileRepository.findByUserId(requesterId);
+      const requesterName = requesterProfile ? requesterProfile.username : 'Someone';
+      await Notification.create({
+        userId: recipientId,
+        title: 'New Friend Request',
+        body: `${requesterName} sent you a friend request.`,
+        type: 'friend_request',
+        metadata: { requesterId: requesterId.toString(), requestId: (request._id || request.id).toString() }
+      });
+    } catch (err) {
+      console.error('Failed to create friend request notification:', err);
+    }
+
+    return request;
   }
 
   async acceptRequest(requestId: string | Types.ObjectId, userId: string | Types.ObjectId): Promise<IFriendship> {

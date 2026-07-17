@@ -1,6 +1,16 @@
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_SERVER_URL = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:4000';
+const getSocketServerUrl = () => {
+  if (process.env.NEXT_PUBLIC_SOCKET_SERVER_URL) {
+    return process.env.NEXT_PUBLIC_SOCKET_SERVER_URL;
+  }
+  if (process.env.NEXT_PUBLIC_EXPRESS_API_URL) {
+    return process.env.NEXT_PUBLIC_EXPRESS_API_URL.replace(/\/api\/v1\/?$/, '');
+  }
+  return 'http://localhost:4000';
+};
+
+const SOCKET_SERVER_URL = getSocketServerUrl();
 
 class SocketManager {
   private sockets: Record<string, Socket> = {};

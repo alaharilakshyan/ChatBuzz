@@ -4,6 +4,8 @@ import { IMessage } from '../models/Message';
 import { IAttachment } from '../models/Attachment';
 import { ForbiddenError, NotFoundError } from '../middleware/error';
 import { Types } from 'mongoose';
+import { Profile } from '../models/Profile';
+import { Notification } from '../models/Notification';
 
 export class MessageService {
   private messageRepository = new MessageRepository();
@@ -61,6 +63,21 @@ export class MessageService {
           messageId: message._id as Types.ObjectId
         });
       }
+    }
+
+    // Create notification for direct message
+    try {
+      const senderProfile = await Profile.findOne({ userId: senderId });
+      const senderName = senderProfile ? senderProfile.username : 'Someone';
+      await Notification.create({
+        userId: new Types.ObjectId(recipientId),
+        title: `New message from ${senderName}`,
+        body: content || 'Sent an attachment',
+        type: 'message',
+        metadata: { senderId: senderId.toString(), messageId: message._id.toString() }
+      });
+    } catch (err) {
+      console.error('Failed to create message notification:', err);
     }
 
     return message;

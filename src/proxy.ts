@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const EXPRESS_API_URL = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:4000/api/v1'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const token = request.cookies.get('chatbuzz_token')?.value
   const refreshToken = request.cookies.get('chatbuzz_refresh_token')?.value

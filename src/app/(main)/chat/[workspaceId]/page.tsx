@@ -3,6 +3,8 @@ import { MessageSquare, Sparkles, Folder, Bookmark, Pin, Plus, Compass } from 'l
 import { fetchServer } from '@/lib/api/server'
 import { WorkspacesGrid, Workspace } from '@/components/chat/WorkspacesGrid'
 
+export const dynamic = 'force-dynamic'
+
 interface PageProps {
   params: {
     workspaceId: string

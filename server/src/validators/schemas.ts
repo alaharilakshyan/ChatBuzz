@@ -24,7 +24,7 @@ export const friendRequestSchema = z.object({
 export const workspaceSchema = z.object({
   body: z.object({
     name: z.string().min(2),
-    iconUrl: z.string().url().optional().nullable()
+    iconUrl: z.string().optional().nullable()
   })
 });
 
@@ -46,9 +46,9 @@ export const messageSchema = z.object({
 
 export const storySchema = z.object({
   body: z.object({
-    mediaUrl: z.string().url(),
+    mediaUrl: z.string(),
     mediaType: z.enum(['image', 'video']),
     mediaExtension: z.string(),
-    caption: z.string().optional()
+    caption: z.string().optional().nullable()
   })
 });

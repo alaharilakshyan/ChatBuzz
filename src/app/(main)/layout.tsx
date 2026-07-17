@@ -6,6 +6,8 @@ import { CallProvider } from '@/components/call/CallContext'
 import { CallRoom } from '@/components/call/CallRoom'
 import { GlobalIncomingCallOverlay } from '@/components/call/GlobalIncomingCallOverlay'
 
+export const dynamic = 'force-dynamic'
+
 interface MainLayoutProps {
   children: React.ReactNode
 }

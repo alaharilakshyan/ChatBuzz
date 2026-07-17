@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { fetchServer } from '@/lib/api/server'
 import { SettingsForm } from '@/components/settings/SettingsForm'
 
+export const dynamic = 'force-dynamic'
+
 export default async function SettingsPage() {
   let profile: any = null
 

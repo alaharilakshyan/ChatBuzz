@@ -10,6 +10,16 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:7.0-alpine
+        ports:
+          - 6379:6379
+
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
@@ -29,8 +39,7 @@ jobs:
     - name: Build Next.js Application
       run: npm run build
       env:
-        NEXT_PUBLIC_SUPABASE_URL: "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}"
+        NEXT_PUBLIC_EXPRESS_API_URL: "http://localhost:4000/api/v1"
 
     - name: Run ESLint Checks
       run: npm run lint
@@ -38,10 +47,21 @@ jobs:
     - name: Run TypeScript Type-Check
       run: npx tsc --noEmit
 
+    - name: Start Backend Server
+      run: |
+        cd server
+        npm ci
+        npm run build
+        # Start server in background
+        MONGODB_URI="mongodb://localhost:27017/chatbuzz" REDIS_URL="redis://localhost:6379" NODE_ENV=development npm run start &
+        # Wait for backend to be healthy
+        timeout 60s bash -c 'until curl -sf http://localhost:4000/api/v1/health; do sleep 2; done'
+      env:
+        PORT: 4000
+
     - name: Run Playwright E2E Tests
       run: npx playwright test
       env:
         TEST_USER_EMAIL: "${{ secrets.TEST_USER_EMAIL }}"
         TEST_USER_PASSWORD: "${{ secrets.TEST_USER_PASSWORD }}"
-        NEXT_PUBLIC_SUPABASE_URL: "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}"
+        NEXT_PUBLIC_EXPRESS_API_URL: "http://localhost:4000/api/v1"

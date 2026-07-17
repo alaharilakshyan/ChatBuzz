@@ -1,0 +1,25 @@
+{
+  "cookies": [
+    {
+      "name": "chatbuzz_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNWE0ZmVjNzhlMWYwOWEwMzA0ZjM3MSIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsImlhdCI6MTc4NDMwMzY0NywiZXhwIjoxNzg0MzA0NTQ3fQ._viknMV0DkLaJdXavFl5tmpy6Y6vBANfsVueGzFeE2U",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1784304547.473338,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "chatbuzz_refresh_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNWE0ZmVjNzhlMWYwOWEwMzA0ZjM3MSIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsImlhdCI6MTc4NDMwMzY0NywiZXhwIjoxNzg0OTA4NDQ3fQ.kHBcIuN-M2Pz9axZ7Mk1eYAdxM5wsG0w7GQ82wFmS1w",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1784908447.474275,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

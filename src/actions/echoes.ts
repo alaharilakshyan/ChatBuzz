@@ -20,7 +20,7 @@ export async function createStoryAction(
         mediaUrl,
         mediaType,
         mediaExtension,
-        caption: caption || null
+        caption: caption || undefined
       })
     });
 

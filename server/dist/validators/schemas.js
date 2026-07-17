@@ -23,7 +23,7 @@ exports.friendRequestSchema = zod_1.z.object({
 exports.workspaceSchema = zod_1.z.object({
     body: zod_1.z.object({
         name: zod_1.z.string().min(2),
-        iconUrl: zod_1.z.string().url().optional().nullable()
+        iconUrl: zod_1.z.string().optional().nullable()
     })
 });
 exports.channelSchema = zod_1.z.object({
@@ -42,9 +42,9 @@ exports.messageSchema = zod_1.z.object({
 });
 exports.storySchema = zod_1.z.object({
     body: zod_1.z.object({
-        mediaUrl: zod_1.z.string().url(),
+        mediaUrl: zod_1.z.string(),
         mediaType: zod_1.z.enum(['image', 'video']),
         mediaExtension: zod_1.z.string(),
-        caption: zod_1.z.string().optional()
+        caption: zod_1.z.string().optional().nullable()
     })
 });

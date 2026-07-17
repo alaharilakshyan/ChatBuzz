@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { fetchServer } from '@/lib/api/server'
 import { ProfileEditForm } from '@/components/profile/ProfileEditForm'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ProfilePage() {
   let profile: any = null
 

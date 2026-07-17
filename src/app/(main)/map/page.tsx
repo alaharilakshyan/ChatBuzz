@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { fetchServer } from '@/lib/api/server'
 import MapClientWrapper from '@/components/map/MapClientWrapper'
 
+export const dynamic = 'force-dynamic'
+
 export default async function MapPage() {
   let profile: any = null
   let friendsList: any[] = []

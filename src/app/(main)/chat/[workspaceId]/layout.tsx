@@ -4,6 +4,8 @@ import { fetchServer } from '@/lib/api/server'
 import { ChannelsSidebar, Channel, DMFriend } from '@/components/layout/ChannelsSidebar'
 import { Workspace } from '@/components/layout/WorkspaceSidebar'
 
+export const dynamic = 'force-dynamic'
+
 interface WorkspaceLayoutProps {
   children: React.ReactNode
   params: Promise<{

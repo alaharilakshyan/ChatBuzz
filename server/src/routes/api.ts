@@ -42,6 +42,7 @@ router.patch('/users/me', authenticate as any, userController.updateProfile);
 router.patch('/users/location', authenticate as any, userController.updateLocation);
 router.post('/users/avatar', authenticate as any, uploadMemory.single('avatar'), userController.uploadAvatar);
 router.post('/users/banner', authenticate as any, uploadMemory.single('banner'), userController.uploadBanner);
+router.post('/media/upload', authenticate as any, uploadMemory.single('file'), userController.uploadGenericMedia);
 
 // Friend routes
 router.get('/friends', authenticate as any, friendshipController.getFriends);

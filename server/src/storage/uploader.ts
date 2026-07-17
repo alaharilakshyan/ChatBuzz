@@ -32,6 +32,15 @@ const ALLOWED_EXTENSIONS = {
   documents: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'zip', 'rar', '7z']
 };
 
+// Local storage fallback check (if credentials are mock or not configured)
+export const isCloudinaryMock =
+  env.CLOUDINARY_CLOUD_NAME === 'mock_cloud' ||
+  env.CLOUDINARY_API_KEY === 'mock_key' ||
+  env.CLOUDINARY_API_SECRET === 'mock_secret' ||
+  !env.CLOUDINARY_CLOUD_NAME ||
+  !env.CLOUDINARY_API_KEY ||
+  !env.CLOUDINARY_API_SECRET;
+
 export async function uploadMedia(
   fileBuffer: Buffer,
   originalName: string,
@@ -62,9 +71,6 @@ export async function uploadMedia(
   } else if (ALLOWED_EXTENSIONS.videos.includes(extension) || ALLOWED_EXTENSIONS.audio.includes(extension)) {
     resourceType = 'video';
   }
-
-  // Local storage fallback check (if credentials are mock or not configured)
-  const isCloudinaryMock = env.CLOUDINARY_CLOUD_NAME === 'mock_cloud' || !env.CLOUDINARY_API_KEY;
 
   if (isCloudinaryMock) {
     logger.info('📦 Storage fallback: Saving file to local storage directory.');

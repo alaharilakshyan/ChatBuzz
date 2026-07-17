@@ -17,7 +17,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  let response = NextResponse.next()
+  const response = NextResponse.next()
   let currentToken = token
 
   // 🔄 Silent Token Refresh inside Middleware (if access token is missing but refresh token exists)

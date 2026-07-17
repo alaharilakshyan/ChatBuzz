@@ -45,13 +45,15 @@ export const friendService = {
 export const storageService = {
   async uploadMedia(file: File, folder: 'avatars' | 'banners' | 'backgrounds' | 'workspace-icons' | 'stories' | 'attachments' | 'voice-notes') {
     const formData = new FormData();
-    // Map file key based on folder target
+    const isUserPhoto = folder === 'avatars' || folder === 'banners';
     formData.append(
       folder === 'avatars' ? 'avatar' : folder === 'banners' ? 'banner' : 'file',
       file
     );
 
-    const url = `${EXPRESS_API_URL}${folder === 'avatars' ? '/users/avatar' : '/users/banner'}`;
+    const url = isUserPhoto
+      ? `${EXPRESS_API_URL}${folder === 'avatars' ? '/users/avatar' : '/users/banner'}`
+      : `${EXPRESS_API_URL}/media/upload?folder=${folder}`;
     const response = await fetch(url, {
       method: 'POST',
       credentials: 'include',

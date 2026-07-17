@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { env } from '../config/env';
 import { success } from '../utils/response';
+import { isCloudinaryMock } from '../storage/uploader';
 import os from 'os';
 
 export class HealthController {
@@ -19,7 +20,7 @@ export class HealthController {
       environment: env.NODE_ENV,
       services: {
         database: dbStatus,
-        storage: env.CLOUDINARY_CLOUD_NAME === 'mock_cloud' ? 'local_fallback' : 'cloudinary',
+        storage: isCloudinaryMock ? 'local_fallback' : 'cloudinary',
         auth: env.AUTH_PROVIDER
       },
       system: {

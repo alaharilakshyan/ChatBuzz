@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.isCloudinaryMock = void 0;
 exports.uploadMedia = uploadMedia;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -22,6 +23,13 @@ const ALLOWED_EXTENSIONS = {
     audio: ['mp3', 'wav', 'ogg', 'aac', 'opus', 'm4a'],
     documents: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'zip', 'rar', '7z']
 };
+// Local storage fallback check (if credentials are mock or not configured)
+exports.isCloudinaryMock = env_1.env.CLOUDINARY_CLOUD_NAME === 'mock_cloud' ||
+    env_1.env.CLOUDINARY_API_KEY === 'mock_key' ||
+    env_1.env.CLOUDINARY_API_SECRET === 'mock_secret' ||
+    !env_1.env.CLOUDINARY_CLOUD_NAME ||
+    !env_1.env.CLOUDINARY_API_KEY ||
+    !env_1.env.CLOUDINARY_API_SECRET;
 async function uploadMedia(fileBuffer, originalName, mimeType, folder) {
     const extension = originalName.split('.').pop()?.toLowerCase() || '';
     const size = fileBuffer.length;
@@ -45,9 +53,7 @@ async function uploadMedia(fileBuffer, originalName, mimeType, folder) {
     else if (ALLOWED_EXTENSIONS.videos.includes(extension) || ALLOWED_EXTENSIONS.audio.includes(extension)) {
         resourceType = 'video';
     }
-    // Local storage fallback check (if credentials are mock or not configured)
-    const isCloudinaryMock = env_1.env.CLOUDINARY_CLOUD_NAME === 'mock_cloud' || !env_1.env.CLOUDINARY_API_KEY;
-    if (isCloudinaryMock) {
+    if (exports.isCloudinaryMock) {
         logger_1.logger.info('📦 Storage fallback: Saving file to local storage directory.');
         const uploadDir = path_1.default.join(__dirname, '../../uploads', folder);
         if (!fs_1.default.existsSync(uploadDir)) {

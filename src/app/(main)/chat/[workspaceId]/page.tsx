@@ -1,7 +1,43 @@
 import React from 'react'
 import { MessageSquare, Sparkles, Folder, Bookmark, Pin, Plus, Compass } from 'lucide-react'
+import { fetchServer } from '@/lib/api/server'
+import { WorkspacesGrid, Workspace } from '@/components/chat/WorkspacesGrid'
 
-export default function WorkspaceIndexPage() {
+interface PageProps {
+  params: {
+    workspaceId: string
+  }
+}
+
+export default async function WorkspaceIndexPage({ params }: PageProps) {
+  const { workspaceId } = params
+  const isHome = workspaceId === 'home'
+
+  let workspaces: Workspace[] = []
+  if (isHome) {
+    try {
+      const workspacesList = await fetchServer('/workspaces')
+      workspaces = workspacesList.map((ws: any) => ({
+        id: ws._id || ws.id,
+        name: ws.name,
+        icon_url: ws.iconUrl || null
+      }))
+    } catch (err) {
+      console.error('Failed to fetch workspaces for grid:', err)
+    }
+  }
+
+  if (isHome) {
+    return (
+      <div className="flex-1 overflow-y-auto flex flex-col p-6 relative min-h-full bg-slate-50/30 dark:bg-slate-950/30 selection:bg-emerald-500/20">
+        {/* Decorative Blur Ambient Light */}
+        <div className="absolute inset-0 pointer-events-none opacity-20 dark:opacity-20" style={{ background: 'radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 60%)' }} />
+        
+        <WorkspacesGrid workspaces={workspaces} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center p-8 relative min-h-full bg-slate-50/30 dark:bg-slate-950/30 selection:bg-emerald-500/20">
       

@@ -247,11 +247,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               </TooltipContent>
             </Tooltip>
           </div>
+        </div>
 
-          <div className="w-8 h-[1px] bg-slate-200 dark:bg-slate-800/60 my-2" />
-
-          {/* Workspaces list */}
-          <div className="flex flex-col items-center gap-4 w-full max-h-[250px] overflow-y-auto scrollbar-none px-2 py-1">
+        {/* Middle: Workspaces (Scrollable) */}
+        <div className="w-full flex-1 min-h-0 flex flex-col items-center my-3">
+          <div className="w-8 h-[1px] bg-slate-200 dark:bg-slate-800/60 mb-4 flex-shrink-0" />
+          <div className="flex-1 w-full overflow-y-auto scrollbar-none flex flex-col items-center gap-4 px-2 py-1">
             {workspaces.map((ws) => {
               const isActive = pathname === `/chat/${ws.id}`
               const initials = ws.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
@@ -356,7 +357,6 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                 </form>
               </DialogContent>
             </Dialog>
-
           </div>
         </div>
 

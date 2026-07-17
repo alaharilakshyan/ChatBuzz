@@ -73,6 +73,7 @@ router.patch('/users/me', auth_1.authenticate, userController.updateProfile);
 router.patch('/users/location', auth_1.authenticate, userController.updateLocation);
 router.post('/users/avatar', auth_1.authenticate, upload_1.uploadMemory.single('avatar'), userController.uploadAvatar);
 router.post('/users/banner', auth_1.authenticate, upload_1.uploadMemory.single('banner'), userController.uploadBanner);
+router.post('/media/upload', auth_1.authenticate, upload_1.uploadMemory.single('file'), userController.uploadGenericMedia);
 // Friend routes
 router.get('/friends', auth_1.authenticate, friendshipController.getFriends);
 router.get('/friends/requests', auth_1.authenticate, friendshipController.getRequests);

@@ -6,7 +6,6 @@ const uploader_1 = require("../storage/uploader");
 const Location_1 = require("../models/Location");
 const logger_1 = require("../utils/logger");
 const response_1 = require("../utils/response");
-const env_1 = require("../config/env");
 const mongoose_1 = require("mongoose");
 class UserController {
     profileService = new ProfileService_1.ProfileService();
@@ -89,7 +88,7 @@ class UserController {
             return (0, response_1.success)(res, 'Avatar image uploaded successfully.', {
                 url: result.url,
                 publicId: result.publicId || null,
-                provider: env_1.env.CLOUDINARY_CLOUD_NAME === 'mock_cloud' ? 'local' : 'cloudinary',
+                provider: uploader_1.isCloudinaryMock ? 'local' : 'cloudinary',
                 mimeType: result.mimeType,
                 extension: result.extension,
                 size: result.size,
@@ -116,7 +115,7 @@ class UserController {
             return (0, response_1.success)(res, 'Banner image uploaded successfully.', {
                 url: result.url,
                 publicId: result.publicId || null,
-                provider: env_1.env.CLOUDINARY_CLOUD_NAME === 'mock_cloud' ? 'local' : 'cloudinary',
+                provider: uploader_1.isCloudinaryMock ? 'local' : 'cloudinary',
                 mimeType: result.mimeType,
                 extension: result.extension,
                 size: result.size,
@@ -126,6 +125,33 @@ class UserController {
         }
         catch (err) {
             (0, logger_1.logOperation)('UPLOAD_USER_BANNER', userId, undefined, 'FAILED', Date.now() - start, err);
+            return next(err);
+        }
+    };
+    uploadGenericMedia = async (req, res, next) => {
+        const userId = req.user.id;
+        const file = req.file;
+        const folder = req.query.folder || 'attachments';
+        const start = Date.now();
+        if (!file) {
+            return res.status(400).json({ error: 'No media file was provided.' });
+        }
+        try {
+            const result = await (0, uploader_1.uploadMedia)(file.buffer, file.originalname, file.mimetype, folder);
+            (0, logger_1.logOperation)('UPLOAD_GENERIC_MEDIA', userId, undefined, 'SUCCESS', Date.now() - start, undefined, { folder });
+            return (0, response_1.success)(res, 'Media file uploaded successfully.', {
+                url: result.url,
+                publicId: result.publicId || null,
+                provider: uploader_1.isCloudinaryMock ? 'local' : 'cloudinary',
+                mimeType: result.mimeType,
+                extension: result.extension,
+                size: result.size,
+                checksum: result.checksum,
+                uploadedAt: new Date().toISOString()
+            });
+        }
+        catch (err) {
+            (0, logger_1.logOperation)('UPLOAD_GENERIC_MEDIA', userId, undefined, 'FAILED', Date.now() - start, err, { folder });
             return next(err);
         }
     };

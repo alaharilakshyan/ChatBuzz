@@ -1,6 +1,7 @@
 'use server'
 
 import { fetchServer } from '@/lib/api/server'
+import { revalidatePath } from 'next/cache'
 
 export async function createWorkspaceAction(name: string) {
   if (!name || name.trim() === '') {
@@ -12,6 +13,8 @@ export async function createWorkspaceAction(name: string) {
       method: 'POST',
       body: JSON.stringify({ name: name.trim() })
     });
+    revalidatePath('/')
+    revalidatePath('/chat')
     return { success: true, workspaceId: workspace._id || workspace.id }
   } catch (err: any) {
     console.error('CreateWorkspaceAction failure:', err)

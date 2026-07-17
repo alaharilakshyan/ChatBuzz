@@ -7,6 +7,7 @@ exports.HealthController = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const env_1 = require("../config/env");
 const response_1 = require("../utils/response");
+const uploader_1 = require("../storage/uploader");
 const os_1 = __importDefault(require("os"));
 class HealthController {
     check = async (req, res) => {
@@ -21,7 +22,7 @@ class HealthController {
             environment: env_1.env.NODE_ENV,
             services: {
                 database: dbStatus,
-                storage: env_1.env.CLOUDINARY_CLOUD_NAME === 'mock_cloud' ? 'local_fallback' : 'cloudinary',
+                storage: uploader_1.isCloudinaryMock ? 'local_fallback' : 'cloudinary',
                 auth: env_1.env.AUTH_PROVIDER
             },
             system: {
